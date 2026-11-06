@@ -1,0 +1,68 @@
+
+============================================================
+FILE: C:\Users\Nikitos\Desktop\nit2026\collect.bat
+============================================================
+@echo off
+setlocal enabledelayedexpansion
+chcp 65001 >nul
+
+set "OUTPUT=project_code.txt"
+set "ROOT=%~dp0"
+
+:: ˜˜˜˜˜˜˜˜/˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜ ˜˜˜˜
+> "%OUTPUT%" echo.
+
+:: ˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜, ˜˜˜˜˜˜˜ ˜˜˜˜˜ ˜˜˜˜˜˜˜ (˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜)
+set "EXTS=.py .js .ts .jsx .tsx .html .css .scss .json .md .txt .java .c .cpp .h .hpp .cs .go .rs .php .rb .sql .yml .yaml .xml .sh .bat .cmd .ini .cfg .toml .vue .svelte"
+
+for /r "%ROOT%" %%F in (*) do (
+    set "FILE=%%F"
+    set "EXT=%%~xF"
+
+    :: ˜˜˜˜˜˜˜˜˜˜ ˜˜˜ ˜˜˜˜˜˜˜˜ ˜˜˜˜
+    if /I not "%%~nxF"=="%OUTPUT%" (
+
+        :: ˜˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜ ˜ ˜˜˜˜˜˜˜
+        set "SKIP="
+        echo !FILE! | findstr /I /C:"\node_modules\\" /C:"\.git\\" /C:"\venv\\" /C:"\.venv\\" /C:"\__pycache__\\" /C:"\dist\\" /C:"\build\\" /C:"\target\\" >nul && set "SKIP=1"
+
+        if not defined SKIP (
+            :: ˜˜˜˜˜˜˜˜˜ ˜˜˜˜˜˜˜˜˜˜
+            echo !EXTS! | findstr /I /C:"!EXT!" >nul
+            if !errorlevel! == 0 (
+                echo ============================================================>> "%OUTPUT%"
+                echo FILE: %%F>> "%OUTPUT%"
+                echo ============================================================>> "%OUTPUT%"
+                type "%%F">> "%OUTPUT%"
+                echo.>> "%OUTPUT%"
+                echo.>> "%OUTPUT%"
+                echo [+] %%F
+            )
+        )
+    )
+)
+
+echo.
+echo ˜˜˜˜˜˜! ˜˜ ˜˜˜˜˜˜˜˜˜ ˜: %OUTPUT%
+pause
+
+============================================================
+FILE: C:\Users\Nikitos\Desktop\nit2026\pyproject.toml
+============================================================
+[project]
+name = "synth-data-service"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "scipy>=1.11",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
