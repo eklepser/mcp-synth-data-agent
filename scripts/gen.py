@@ -27,13 +27,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--nv", "--no-visualize", dest="no_visualize", action="store_true", help="Do not open the visualization window")
     return p
 
-def similarity_score(report) -> float:
+def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, profile) -> float:
     ks_vals = [c.ks for c in report.columns if c.kind in ("numeric", "datetime") and c.ks is not None]
     tv_vals = [c.tv for c in report.columns if c.kind in ("categorical", "boolean") and c.tv is not None]
+    
+    # Сравниваем mean и std для числовых столбцов
+    stats_errors = []
+    for c in profile.columns:
+        if c.kind == "numeric" and c.name in source_df.columns and c.name in synth_df.columns:
+            real = source_df[c.name].dropna()
+            syn = synth_df[c.name].dropna()
+            if len(real) > 1 and len(syn) > 1:
+                std_err = abs(real.std() - syn.std()) / (real.std() + 1e-9)
+                mean_err = abs(real.mean() - syn.mean()) / (abs(real.mean()) + 1e-9)
+                stats_errors.extend([std_err, mean_err])
+
     parts = []
     if ks_vals: parts.append(1.0 - float(np.mean(ks_vals)))
     if tv_vals: parts.append(1.0 - float(np.mean(tv_vals)))
+    if stats_errors: parts.append(1.0 - float(np.mean(stats_errors))) # Ошибка статистик
     if report.frobenius_corr is not None: parts.append(1.0 / (1.0 + float(report.frobenius_corr)))
+    
     return float(np.mean(parts)) if parts else 0.0
 
 def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
@@ -124,7 +138,7 @@ def main() -> int:
                     synth[c.name] = synth[c.name].clip(lower=c.min, upper=c.max)
 
         report = evaluate_reproduction(df, synth, profile=prof)
-        score = similarity_score(report)
+        score = similarity_score(report, df, synth, prof)
 
         if score > best_score:
             best_score, best_synth, best_report = score, synth, report

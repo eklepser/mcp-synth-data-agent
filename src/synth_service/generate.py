@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import random
 import string
+import uuid
 import numpy as np
 import pandas as pd
 
 from synth_service.copula_model import fit_copula
 from synth_service.profile import TableProfile
+
 
 def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_state: int = 42, clip_to_range: bool = True) -> pd.DataFrame:
     numeric_cols = [c.name for c in profile.columns if c.kind == "numeric"]
@@ -15,19 +17,47 @@ def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_sta
 
     copula = fit_copula(df, numeric_cols, random_state=random_state)
     synth = copula.sample(n)
-
-    if clip_to_range:
-        for c in profile.columns:
-            if c.kind == "numeric" and c.min is not None and c.max is not None:
-                synth[c.name] = synth[c.name].clip(lower=c.min, upper=c.max)
+    rng = np.random.default_rng(random_state)
 
     for c in profile.columns:
-        if c.kind == "numeric" and c.is_integer and c.name in synth.columns:
+        if c.kind != "numeric":
+            continue
+            
+        if c.is_integer:
             rounded = np.round(synth[c.name].to_numpy())
-            if c.min is not None: rounded = np.maximum(rounded, np.floor(c.min))
-            if c.max is not None: rounded = np.minimum(rounded, np.ceil(c.max))
+            if c.min is not None: 
+                rounded = np.maximum(rounded, np.floor(c.min))
+            if c.max is not None: 
+                rounded = np.minimum(rounded, np.ceil(c.max))
             synth[c.name] = rounded.astype("int64")
+        else:
+            vals = synth[c.name].to_numpy()
+            
+            if c.min is not None and c.max is not None:
+                cur_min, cur_max = np.min(vals), np.max(vals)
+                if cur_max > cur_min:
+                    vals = c.min + (vals - cur_min) * (c.max - c.min) / (cur_max - cur_min)
+                else:
+                    vals = np.full_like(vals, c.min)
+                
+                vals = np.clip(vals, c.min, c.max)
+
+            if c.std is not None and c.std > 0:
+                cur_std = np.std(vals)
+                if cur_std > 0:
+                    target_mean = c.mean if c.mean is not None else np.mean(vals)
+                    vals = target_mean + (vals - np.mean(vals)) * (c.std / cur_std)
+                    if c.min is not None and c.max is not None:
+                        vals = np.clip(vals, c.min, c.max)
+
+            span = (c.max - c.min) if (c.min is not None and c.max is not None) else 1.0
+            delta = max(1e-5, span * 0.0001)
+            vals = vals + rng.uniform(-delta, delta, size=len(vals))
+            
+            synth[c.name] = vals
+
     return synth
+
 
 def generate_categorical(profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(random_state)
@@ -40,6 +70,7 @@ def generate_categorical(profile: TableProfile, n: int, random_state: int = 42) 
             result[c.name] = rng.choice(cats, size=n, p=probs)
     return pd.DataFrame(result)
 
+
 def generate_boolean(profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(random_state)
     result = {}
@@ -51,6 +82,7 @@ def generate_boolean(profile: TableProfile, n: int, random_state: int = 42) -> p
             result[c.name] = rng.choice(vals, size=n, p=probs)
     return pd.DataFrame(result)
 
+
 def generate_identifier(df: pd.DataFrame, profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(random_state)
     result = {}
@@ -61,6 +93,7 @@ def generate_identifier(df: pd.DataFrame, profile: TableProfile, n: int, random_
             rng.shuffle(vals)
             result[c.name] = vals
     return pd.DataFrame(result)
+
 
 def generate_datetime(profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
     rng = np.random.default_rng(random_state)
@@ -76,53 +109,77 @@ def generate_datetime(profile: TableProfile, n: int, random_state: int = 42) -> 
             result[c.name] = ts.strftime(c.datetime_format) if c.datetime_format else ts
     return pd.DataFrame(result)
 
+
 def generate_text(profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
-    rng = np.random.default_rng(random_state)
     py_rng = random.Random(random_state)
     result = {}
     for c in profile.columns:
         if c.kind != "text":
             continue
 
-        if c.text_pattern == "email":
-            domains = c.text_options.get("domain", ["example.com"])
-            emails = set()
-            while len(emails) < n:
-                num = rng.integers(1, 1000000)
-                dom = py_rng.choice(domains)
-                emails.add(f"user{num}@{dom}")
-            result[c.name] = list(emails)
+        if c.text_pattern == "uuid":
+            generated = set()
+            while len(generated) < n:
+                generated.add(str(uuid.UUID(int=py_rng.getrandbits(128))))
+            result[c.name] = list(generated)
+
+        elif c.text_pattern == "mac":
+            generated = set()
+            while len(generated) < n:
+                generated.add(":".join(f"{py_rng.randint(0, 255):02X}" for _ in range(6)))
+            result[c.name] = list(generated)
 
         elif c.text_pattern == "phone":
             length = c.text_options.get("length", 12)
-            phones = set()
-            while len(phones) < n:
+            generated = set()
+            while len(generated) < n:
                 prefix = "+7" 
                 rest_len = length - 2
                 rest = "".join(str(py_rng.randint(0, 9)) for _ in range(rest_len))
-                phones.add(f"{prefix}{rest}")
-            result[c.name] = list(phones)
+                generated.add(f"{prefix}{rest}")
+            result[c.name] = list(generated)
 
-        elif c.text_pattern == "code":
-            length = c.text_options.get("length", 6)
-            codes = set()
-            while len(codes) < n:
-                val = py_rng.randint(0, 10**length - 1)
-                codes.add(f"{val:0{length}d}")
-            result[c.name] = list(codes)
-
-        elif c.text_pattern == "full_name":
-            f_names = c.text_options.get("first_name", ["Ivan"])
-            l_names = c.text_options.get("last_name", ["Ivanov"])
-            names = []
-            for _ in range(n):
-                names.append(f"{py_rng.choice(f_names)} {py_rng.choice(l_names)}")
-            result[c.name] = names
-
+        elif c.text_pattern == "pattern":
+            pattern = c.text_options["pattern"]
+            generated = set()
+            max_attempts = n * 10 
+            attempts = 0
+            
+            while len(generated) < n and attempts < max_attempts:
+                attempts += 1
+                s_parts = []
+                for item in pattern:
+                    item_type = item[0]
+                    if item_type == "literal":
+                        s_parts.append(item[1])
+                    elif item_type == "number":
+                        min_val, max_val, min_len, max_len = item[1], item[2], item[3], item[4]
+                        val = py_rng.randint(min_val, max_val)
+                        s_parts.append(f"{val:0{max_len}d}" if len(str(val)) < min_len else str(val))
+                    elif item_type == "word":
+                        words, is_lower, is_upper = item[1], item[2], item[3]
+                        word = py_rng.choice(words)
+                        if is_lower: word = word.lower()
+                        elif is_upper: word = word.upper()
+                        s_parts.append(word)
+                    else:
+                        min_len, max_len = item[1], item[2]
+                        length = py_rng.randint(min_len, max_len)
+                        s_parts.append("".join(py_rng.choice(string.ascii_letters) for _ in range(length)))
+                generated.add("".join(s_parts))
+            
+            result[c.name] = list(generated)
+            while len(result[c.name]) < n:
+                result[c.name].append(py_rng.choice(result[c.name]))
+                
         else:
-            result[c.name] = ["".join(py_rng.choices(string.ascii_lowercase, k=8)) for _ in range(n)]
+            generated = set()
+            while len(generated) < n:
+                generated.add("".join(py_rng.choices(string.ascii_lowercase, k=8)))
+            result[c.name] = list(generated)
 
     return pd.DataFrame(result)
+
 
 def generate_table(df: pd.DataFrame, profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
     parts = []

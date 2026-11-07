@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import warnings
+from collections import Counter
 from dataclasses import dataclass, field, asdict
 from typing import Any
 
@@ -27,9 +29,6 @@ _DATETIME_FORMATS = [
     "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
     "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d",
 ]
-
-_DEFAULT_FIRST_NAMES = ["Ivan", "Petr", "Anna", "Maria", "Olga", "Sergey", "Dmitry", "Elena", "Alexey", "Natalia"]
-_DEFAULT_LAST_NAMES = ["Ivanov", "Petrov", "Smirnova", "Kuznetsov", "Popova", "Sokolov", "Lebedeva", "Kozlov", "Novikov", "Morozov"]
 
 @dataclass
 class ColumnProfile:
@@ -59,6 +58,8 @@ class ColumnProfile:
     std: float | None = None
     min: float | None = None
     max: float | None = None
+    q01: float | None = None
+    q99: float | None = None
 
 @dataclass
 class TableProfile:
@@ -198,44 +199,62 @@ def _fit_numeric(values: np.ndarray) -> tuple[str, dict[str, float], float]:
 
 def _extract_text_pattern(strings: list[str]) -> tuple[str, dict[str, Any]]:
     if not strings:
-        return "", {}
+        return "generic", {}
+    
+    # 1. UUID
+    if all(re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', s) for s in strings):
+        return "uuid", {}
 
-    # 1. Телефон (начинается с +)
+    # 2. MAC-адрес
+    if all(re.match(r'^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$', s) for s in strings):
+        return "mac", {}
+
+    # 3. Телефон
     if all(x.startswith("+") for x in strings):
         return "phone", {"length": len(strings[0])}
 
-    # 2. Email
-    if all("@" in x for x in strings):
-        domains = set(x.split("@")[-1] for x in strings)
-        if len(domains) < 10:
-            return "email", {"domain": list(domains)}
-        return "email", {"domain": ["yandex.ru", "mail.ru", "gmail.com", "example.com"]}
+    # 4. Универсальный токенизатор
+    tokenized = [re.findall(r'[0-9]+|[a-zA-Z]+|.', s) for s in strings]
+    lengths = [len(t) for t in tokenized]
+    if not lengths:
+        return "generic", {}
+        
+    most_common_len = Counter(lengths).most_common(1)[0][0]
+    filtered = [t for t in tokenized if len(t) == most_common_len]
+    
+    pattern = []
+    for i in range(most_common_len):
+        tokens = [t[i] for t in filtered]
+        
+        if len(set(tokens)) == 1:
+            pattern.append(("literal", tokens[0]))
+            continue
+            
+        if all(t.isdigit() for t in tokens):
+            nums = [int(t) for t in tokens]
+            pattern.append(("number", min(nums), max(nums), min(len(t) for t in tokens), max(len(t) for t in tokens)))
+            continue
+            
+        if all(t.isalpha() for t in tokens):
+            unique_words = list(set(tokens)) 
+            is_lower = all(t.islower() for t in tokens)
+            is_upper = all(t.isupper() for t in tokens)
+            pattern.append(("word", unique_words, is_lower, is_upper))
+            continue
+            
+        pattern.append(("any", min(len(t) for t in tokens), max(len(t) for t in tokens)))
 
-    # 3. Документ/Код (только цифры, одинаковая длина)
-    if all(x.isdigit() for x in strings):
-        lengths = set(len(x) for x in strings)
-        if len(lengths) == 1:
-            return "code", {"length": lengths.pop()}
-
-    # 4. ФИО (2 слова)
-    if all(len(x.split()) == 2 for x in strings):
-        return "full_name", {"first_name": _DEFAULT_FIRST_NAMES, "last_name": _DEFAULT_LAST_NAMES}
-
-    return "generic", {}
+    return "pattern", {"pattern": pattern, "length": most_common_len}
 
 def _parse_str_column(s: pd.Series) -> pd.Series:
     clean = s.dropna()
     if len(clean) == 0:
         return s
 
-    # Пробуем числа, НО с жесткими ограничениями:
-    # - не начинается с '0'
-    # - не содержит '+' или ' '
-    # - не является длинной строкой из цифр (это телефон или документ)
     try:
         sample = clean.iloc[0]
         if isinstance(sample, str):
-            if sample.startswith("0") or any(c in sample for c in "+ "):
+            if sample.startswith("0") or any(c in sample for c in "+ :"):
                 raise ValueError("Force string")
             if sample.isdigit() and len(sample) >= 5:
                 raise ValueError("Force string (long digits)")
@@ -245,7 +264,6 @@ def _parse_str_column(s: pd.Series) -> pd.Series:
     except (ValueError, TypeError, AttributeError):
         pass
 
-    # Пробуем даты
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -274,6 +292,8 @@ def profile_column(s: pd.Series) -> ColumnProfile:
         cp.mean = float(np.mean(clean))
         cp.std = float(np.std(clean, ddof=1)) if clean.size > 1 else 0.0
         cp.min, cp.max = float(np.min(clean)), float(np.max(clean))
+        cp.q01 = float(np.quantile(clean, 0.01))
+        cp.q99 = float(np.quantile(clean, 0.99))
         cp.is_integer = _is_integer_column(s)
 
     elif kind == "identifier":

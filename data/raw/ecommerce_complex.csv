@@ -1,0 +1,401 @@
+user_id,sku,ip_address,address,url,session_id,signup_date,orders_count,status
+1000,SKU-8665-A,225.55.162.65,"Yekaterinburg, Baumana st., 30",https://market.net/checkout,b501bf9e-0520-da82-9cbb-67c3bd6bf7cb,2023-03-15,7,banned
+1001,SKU-1237-B,142.100.234.9,"Kazan, Gagarina st., 97",https://market.net/product/123,3f84b7d9-11ae-1e83-cbd1-692dfaaca816,2021-01-03,39,active
+1002,SKU-4288-B,140.13.92.169,"Yekaterinburg, Gagarina st., 97",https://shop.com/user/profile,a31b72a3-9342-4e3d-5d72-4c8e6215214d,2022-08-10,42,inactive
+1003,SKU-1718-B,61.80.172.183,"Saint Petersburg, Tverskaya st., 68",https://market.net/user/profile,eef254c8-cdbd-6e67-d3b3-25ae24934a95,2021-04-21,30,banned
+1004,SKU-6790-B,165.19.86.188,"Yekaterinburg, Tverskaya st., 88",https://shop.com/category/electronics,2acf3602-81d8-b985-2410-1e4dc524fae2,2020-09-15,45,active
+1005,SKU-8478-C,220.54.100.221,"Novosibirsk, Gagarina st., 31",https://market.net/cart,330410c5-2044-ac63-c9cc-c8e3ebdd3fac,2023-10-18,31,active
+1006,SKU-7339-C,32.231.95.176,"Yekaterinburg, Gagarina st., 82",https://example.org/cart,26f5ffea-724e-5ad6-2def-066dbea1bd9f,2023-02-26,23,active
+1007,SKU-7490-A,112.100.95.7,"Yekaterinburg, Baumana st., 98",https://example.org/cart,0b650ed4-13ec-1065-eaa3-53b929d835cf,2021-09-25,5,active
+1008,SKU-8725-B,232.194.235.143,"Saint Petersburg, Baumana st., 91",https://example.org/category/electronics,b25c8c2c-1e8c-3438-ed5e-ecd303def037,2023-01-18,20,inactive
+1009,SKU-1886-A,245.20.91.145,"Moscow, Lenina st., 7",https://market.net/product/123,39147313-6f17-94a7-54c8-3b052fbb1193,2021-02-01,43,inactive
+1010,SKU-2490-C,122.1.26.115,"Novosibirsk, Lenina st., 16",https://store.ru/user/profile,0677327a-9468-fe00-3bc7-3e7466d80fba,2022-08-30,38,inactive
+1011,SKU-7550-C,211.156.73.204,"Moscow, Gagarina st., 29",https://shop.com/checkout,9adaa17d-edd3-f76f-0f53-3060a71a1a0d,2021-09-25,19,active
+1012,SKU-3542-B,226.74.234.59,"Yekaterinburg, Mira st., 34",https://shop.com/user/profile,518928d5-140b-7403-097d-19510594fe90,2020-06-15,46,active
+1013,SKU-6436-C,147.84.183.16,"Saint Petersburg, Mira st., 33",https://store.ru/checkout,98bff248-eb94-8948-f2bf-fabed6855700,2024-03-28,19,active
+1014,SKU-2062-B,14.237.45.224,"Kazan, Mira st., 85",https://example.org/category/electronics,190e91cd-57e2-9ace-f989-ec04efdce26c,2024-09-12,2,active
+1015,SKU-6800-C,170.153.185.19,"Novosibirsk, Gagarina st., 32",https://market.net/user/profile,6a576731-52d7-e004-9636-a24601550b89,2021-11-13,42,active
+1016,SKU-6904-B,13.21.5.237,"Saint Petersburg, Baumana st., 99",https://market.net/category/electronics,9edd0022-2d2c-8f33-c51a-9ce4835e9f7b,2021-05-26,42,active
+1017,SKU-5140-B,114.31.80.37,"Kazan, Lenina st., 72",https://store.ru/user/profile,117b0594-5230-9a02-bd1d-73b71da39d30,2020-06-09,13,active
+1018,SKU-2414-A,230.200.1.77,"Moscow, Tverskaya st., 37",https://shop.com/category/electronics,d1d0fd00-2122-4d8d-6ba3-1dfb1222fee4,2022-06-14,26,active
+1019,SKU-2314-A,167.104.57.105,"Novosibirsk, Mira st., 10",https://store.ru/cart,94efd36b-68de-3598-4064-127cad48780b,2023-09-29,42,active
+1020,SKU-8683-B,109.178.141.120,"Moscow, Baumana st., 74",https://shop.com/checkout,94ad057a-24cb-c0cf-1a29-bef610762d65,2021-04-25,5,active
+1021,SKU-1824-B,157.207.23.126,"Yekaterinburg, Baumana st., 17",https://shop.com/category/electronics,b61b85d7-df04-3c4c-4204-6a0551414ac9,2024-11-10,10,inactive
+1022,SKU-3436-B,193.74.221.50,"Saint Petersburg, Gagarina st., 66",https://store.ru/cart,f79de09e-e644-f9b3-56c6-9fa170bff8bd,2023-02-18,1,banned
+1023,SKU-8471-A,9.192.194.56,"Saint Petersburg, Baumana st., 24",https://shop.com/category/electronics,e3936fd0-b87a-cbbc-9944-fd1c74aff0b3,2024-08-24,46,active
+1024,SKU-5191-B,253.155.9.153,"Kazan, Baumana st., 17",https://market.net/product/123,9ab896e2-1005-57a0-1b88-fc900416f740,2024-08-09,6,inactive
+1025,SKU-9915-B,89.245.70.23,"Moscow, Mira st., 45",https://example.org/cart,1d02bbe3-90d1-9906-5f4a-f1136f83762f,2023-04-20,15,banned
+1026,SKU-2486-A,223.52.83.169,"Moscow, Baumana st., 50",https://example.org/cart,2d74c619-e8ea-722d-e1f8-0756a010ebbc,2021-02-22,42,active
+1027,SKU-5297-B,84.84.126.33,"Novosibirsk, Tverskaya st., 81",https://example.org/category/electronics,62d9adb4-6864-4964-d516-6c07ab993a26,2023-03-21,43,active
+1028,SKU-3938-B,138.228.253.186,"Yekaterinburg, Mira st., 16",https://shop.com/category/electronics,b3cade05-b0e6-0d92-d29a-ad0e24d2f9ff,2021-09-08,30,active
+1029,SKU-6968-A,151.56.222.25,"Kazan, Lenina st., 91",https://example.org/product/123,8f875d48-47e8-0c94-b7e2-f147c6323dbc,2022-07-12,1,active
+1030,SKU-9681-A,181.214.118.145,"Yekaterinburg, Mira st., 86",https://market.net/category/electronics,7f01c78b-6d5d-3474-4f2c-a4596614f9b7,2021-12-16,47,active
+1031,SKU-9416-C,207.237.8.132,"Kazan, Tverskaya st., 11",https://market.net/checkout,886e12f5-3e48-6128-55da-5f82a749cc07,2020-01-29,25,active
+1032,SKU-9611-C,105.58.220.34,"Saint Petersburg, Lenina st., 52",https://shop.com/cart,7a3052bf-d68a-3f84-bec4-db5dd0ff3c29,2021-12-21,0,active
+1033,SKU-5757-B,86.106.57.174,"Novosibirsk, Lenina st., 56",https://store.ru/product/123,56fdfd1b-00e0-7348-2e82-e9c7f5247730,2020-05-08,38,active
+1034,SKU-2860-B,163.1.39.101,"Kazan, Tverskaya st., 25",https://shop.com/product/123,64c54c9e-9908-629b-f24c-636cf92b782c,2024-08-22,21,active
+1035,SKU-5167-C,224.102.108.171,"Yekaterinburg, Baumana st., 64",https://shop.com/cart,43734229-33f3-7a81-a4f4-34f1096fd9fb,2021-05-10,14,inactive
+1036,SKU-8152-B,201.49.170.223,"Saint Petersburg, Tverskaya st., 28",https://store.ru/cart,36d303df-4817-7e9e-6941-c170a47f26ca,2020-02-21,1,active
+1037,SKU-6354-B,226.82.196.211,"Yekaterinburg, Mira st., 51",https://example.org/cart,9133dc2d-8aeb-0d47-90df-7c9babe29695,2022-02-05,3,active
+1038,SKU-4774-C,39.211.236.225,"Novosibirsk, Lenina st., 89",https://shop.com/cart,47232ee5-f326-aaad-ff3e-803b8439ac83,2023-08-13,46,active
+1039,SKU-1037-A,222.66.127.214,"Kazan, Gagarina st., 54",https://example.org/category/electronics,35e79208-8a0c-984f-01ed-c35e00dc7b84,2024-10-06,18,active
+1040,SKU-4674-C,23.58.52.102,"Kazan, Mira st., 52",https://shop.com/category/electronics,3240012c-b33c-efdf-13a9-2153394ce73d,2022-01-12,20,active
+1041,SKU-4706-A,30.45.251.123,"Novosibirsk, Baumana st., 28",https://market.net/category/electronics,62115404-0e9d-d24a-6e12-915315d87eac,2021-10-31,27,active
+1042,SKU-1705-A,208.19.12.244,"Moscow, Baumana st., 58",https://market.net/checkout,91df9168-143d-2456-f33b-0d8df73393a3,2020-06-01,21,active
+1043,SKU-1951-C,245.3.62.127,"Moscow, Mira st., 36",https://shop.com/product/123,2a830aa3-27de-33b0-c9f5-a7767de92618,2024-12-16,2,active
+1044,SKU-4849-A,164.213.2.34,"Yekaterinburg, Mira st., 12",https://market.net/checkout,af10b0bf-d96c-af74-e84d-fbc060ce2dd0,2020-03-15,39,inactive
+1045,SKU-5860-B,6.152.137.135,"Kazan, Tverskaya st., 81",https://store.ru/user/profile,722e1781-9bae-62fd-9310-03d3eda296fc,2020-03-08,8,banned
+1046,SKU-5254-B,52.193.233.178,"Saint Petersburg, Lenina st., 78",https://market.net/category/electronics,28593aee-7941-e7d6-4803-0fd599152500,2020-01-28,29,active
+1047,SKU-6639-A,251.210.21.202,"Novosibirsk, Tverskaya st., 8",https://shop.com/product/123,f912c43e-9ec4-b68f-0b98-a147c57d77ed,2023-06-04,29,inactive
+1048,SKU-2395-C,158.148.51.89,"Moscow, Tverskaya st., 43",https://store.ru/checkout,f90e13fe-f68c-ec49-6ab4-a7d4f51d6e54,2021-05-03,8,active
+1049,SKU-9752-B,91.27.85.42,"Kazan, Lenina st., 91",https://market.net/checkout,fef5c627-0265-6779-5b0d-1c423bfaeb0b,2024-03-29,29,active
+1050,SKU-5056-B,116.222.189.68,"Kazan, Gagarina st., 18",https://store.ru/checkout,3a4a5f47-4103-1de9-065a-7de18ece7792,2023-10-06,9,active
+1051,SKU-1311-B,149.227.242.78,"Saint Petersburg, Lenina st., 30",https://shop.com/product/123,04ca8d37-c6fc-4d5e-bb4f-fbe5afabe62d,2023-12-23,35,active
+1052,SKU-4228-B,79.14.195.74,"Novosibirsk, Tverskaya st., 8",https://store.ru/cart,b3dd1a37-e6cd-78f5-b4f7-c29e418ccdfc,2020-10-28,36,inactive
+1053,SKU-7694-B,91.98.25.27,"Novosibirsk, Tverskaya st., 94",https://market.net/category/electronics,89a0cecc-952b-c060-048a-c3de988dffe1,2023-05-31,15,active
+1054,SKU-8701-B,148.109.83.203,"Moscow, Gagarina st., 40",https://shop.com/product/123,f13a74bd-9d37-9ef6-eeea-2fb5f459701b,2024-11-01,33,active
+1055,SKU-1305-C,55.105.80.126,"Novosibirsk, Mira st., 38",https://example.org/checkout,7501cf22-ee91-3e5b-29a1-10763e219198,2024-03-10,27,active
+1056,SKU-8181-B,34.254.74.55,"Novosibirsk, Gagarina st., 47",https://shop.com/cart,9e56ff5b-a201-5b48-52fc-885bdd833279,2021-01-06,14,active
+1057,SKU-9436-B,178.138.189.251,"Kazan, Lenina st., 71",https://example.org/user/profile,042d51aa-6093-18c6-2e35-db5f2be33eac,2022-07-03,35,inactive
+1058,SKU-8173-A,178.126.82.151,"Yekaterinburg, Lenina st., 28",https://market.net/category/electronics,71380ef9-cd6e-d6f2-494b-5580a9ee24d9,2021-01-26,3,active
+1059,SKU-1350-C,232.139.140.30,"Novosibirsk, Lenina st., 24",https://shop.com/cart,a8b0f604-c406-cd5e-74b4-b34df2d56b05,2020-02-04,31,inactive
+1060,SKU-8859-B,112.182.209.232,"Moscow, Lenina st., 50",https://store.ru/category/electronics,b66b20a5-eacc-b9d0-d641-98fcc37a7c87,2020-11-08,15,active
+1061,SKU-7773-A,166.236.15.150,"Saint Petersburg, Gagarina st., 44",https://market.net/cart,3951b2be-c9b9-a80c-2f79-d7ce8f0f6ce0,2021-11-19,37,active
+1062,SKU-7542-B,66.89.241.172,"Saint Petersburg, Lenina st., 40",https://market.net/cart,b37c0799-3fb6-d497-6c47-9be0fc20a548,2023-05-05,13,inactive
+1063,SKU-3731-A,113.240.101.249,"Novosibirsk, Baumana st., 64",https://shop.com/product/123,2d970fc1-5315-e986-d3aa-982743f91922,2020-10-27,3,banned
+1064,SKU-2571-C,75.72.164.238,"Saint Petersburg, Lenina st., 99",https://store.ru/user/profile,c13b95bf-f320-868b-476a-b34d7529d827,2021-02-01,49,inactive
+1065,SKU-4993-C,20.186.105.222,"Novosibirsk, Mira st., 66",https://example.org/user/profile,eccff619-276f-741d-2bea-83ffa21a1112,2020-12-06,32,active
+1066,SKU-4175-A,199.42.171.248,"Yekaterinburg, Mira st., 31",https://example.org/user/profile,afd284aa-e6a1-7750-78e9-8ed5176b8ce5,2023-12-24,34,inactive
+1067,SKU-3305-B,38.192.27.43,"Yekaterinburg, Baumana st., 94",https://example.org/cart,4fa47ca2-f366-d310-341e-d7634f8cf71e,2021-01-13,9,active
+1068,SKU-7308-C,67.137.200.29,"Yekaterinburg, Mira st., 92",https://shop.com/category/electronics,a58fe1b4-c3b9-b65b-aaa8-6121ed538c12,2020-07-30,25,banned
+1069,SKU-7631-A,11.184.82.152,"Yekaterinburg, Gagarina st., 98",https://store.ru/checkout,13c07640-ddb5-682a-f841-62a60de0ef0c,2024-03-21,19,active
+1070,SKU-4419-B,108.147.84.216,"Yekaterinburg, Mira st., 52",https://market.net/user/profile,ce94b040-6ac4-7960-bc70-86452fe7ee17,2023-07-10,8,active
+1071,SKU-6456-B,30.196.109.24,"Saint Petersburg, Tverskaya st., 14",https://store.ru/checkout,d97cfcd0-34e5-5805-e3d8-acf69c55f231,2020-09-08,23,banned
+1072,SKU-2711-C,229.194.39.138,"Novosibirsk, Mira st., 66",https://shop.com/product/123,40fc788f-70e9-8862-697a-a16525be8d72,2021-06-22,21,active
+1073,SKU-5686-C,40.48.75.89,"Saint Petersburg, Tverskaya st., 86",https://market.net/user/profile,2b7f3756-4f1f-c328-9e8a-1de952a91a9d,2024-09-20,6,active
+1074,SKU-9513-C,251.129.106.219,"Moscow, Mira st., 18",https://example.org/cart,87c985eb-6433-5521-cec7-238bb95fae7e,2021-01-02,42,active
+1075,SKU-9645-B,10.224.9.26,"Novosibirsk, Mira st., 29",https://store.ru/product/123,0779f0aa-b35a-cdea-b6c7-bdbae34dbd6c,2024-01-13,7,banned
+1076,SKU-3683-A,9.112.249.215,"Moscow, Gagarina st., 89",https://shop.com/category/electronics,80280ad0-0850-5802-d390-428f6e7a742a,2022-06-20,27,active
+1077,SKU-1946-C,19.153.239.218,"Yekaterinburg, Baumana st., 17",https://example.org/user/profile,a5300379-2c6c-26bf-1a97-98c3fe36dfc8,2023-11-24,4,active
+1078,SKU-3432-A,72.152.89.57,"Moscow, Mira st., 53",https://example.org/cart,3a016994-b7c0-12fc-a343-ec597e477b4d,2021-07-29,48,active
+1079,SKU-1337-A,225.128.121.131,"Novosibirsk, Mira st., 92",https://market.net/checkout,8863c0e1-62df-9ccb-1a83-4aaaeaae86bc,2021-12-27,13,banned
+1080,SKU-9813-A,54.227.152.91,"Saint Petersburg, Lenina st., 60",https://market.net/cart,413d8985-3291-763e-b88d-c60c060e32bb,2020-08-16,42,inactive
+1081,SKU-1918-C,153.59.124.191,"Yekaterinburg, Mira st., 19",https://store.ru/product/123,9b027d85-7aee-e2bc-4338-74bb4cfc120d,2023-06-11,35,active
+1082,SKU-1537-B,211.106.182.124,"Yekaterinburg, Gagarina st., 82",https://store.ru/checkout,12cb2244-ab50-2817-2b83-86153605edec,2024-10-18,6,active
+1083,SKU-1775-A,20.249.221.172,"Yekaterinburg, Tverskaya st., 55",https://shop.com/category/electronics,95e33da0-3ca5-95e3-c432-869828b192f0,2021-10-18,15,active
+1084,SKU-4240-A,14.171.60.238,"Moscow, Tverskaya st., 33",https://example.org/product/123,52f77d2d-7c88-2a3b-83f1-580b63b05dae,2021-11-27,42,inactive
+1085,SKU-8654-B,23.182.99.243,"Yekaterinburg, Gagarina st., 59",https://market.net/checkout,63d546b7-dab7-d1ac-05aa-4485c5609dfb,2023-09-17,27,active
+1086,SKU-9399-B,199.161.132.150,"Moscow, Lenina st., 2",https://market.net/checkout,402457b9-5015-5c1a-2e8a-afdd6b04ac99,2023-05-07,18,banned
+1087,SKU-6004-B,156.72.136.59,"Yekaterinburg, Baumana st., 82",https://example.org/category/electronics,eb2765e0-0697-185f-9c49-bdbe9ab073f7,2023-11-06,44,active
+1088,SKU-5193-B,70.135.161.16,"Moscow, Mira st., 54",https://market.net/product/123,8079fb29-46a7-0d81-4654-74b9575d04bc,2020-10-13,32,active
+1089,SKU-6151-C,250.42.140.180,"Novosibirsk, Gagarina st., 22",https://store.ru/user/profile,4fd4b307-56b1-d489-4506-a59a825ae0f2,2024-02-25,9,inactive
+1090,SKU-3730-C,69.173.129.8,"Kazan, Baumana st., 79",https://example.org/checkout,a75b850b-4638-e2d3-b1e2-5e37683ec8e8,2024-07-24,20,active
+1091,SKU-2551-A,221.41.30.157,"Kazan, Baumana st., 51",https://example.org/product/123,204c6e31-d7bd-202c-f289-bcfa94e3d42d,2023-05-24,15,active
+1092,SKU-3295-C,49.103.8.150,"Saint Petersburg, Tverskaya st., 80",https://shop.com/checkout,7267c314-59cf-8755-9a28-c71d14c93964,2020-03-06,44,active
+1093,SKU-3202-C,223.32.146.220,"Saint Petersburg, Lenina st., 27",https://market.net/category/electronics,c18b4d92-5c9d-d5fc-8ba3-1fefbb3b3b14,2022-11-07,29,inactive
+1094,SKU-6247-B,55.66.117.96,"Novosibirsk, Tverskaya st., 46",https://store.ru/checkout,72e33713-7c86-d0e2-6962-46ebed3d8631,2022-05-01,45,inactive
+1095,SKU-1697-B,22.114.233.151,"Saint Petersburg, Gagarina st., 45",https://example.org/user/profile,ddf9f410-3a2b-7691-1e9b-16c1583fc26f,2024-09-11,0,active
+1096,SKU-1625-B,81.250.22.54,"Saint Petersburg, Gagarina st., 79",https://shop.com/product/123,3f967cc3-0590-35b8-1cdc-f94531f78567,2022-10-01,9,inactive
+1097,SKU-8082-C,251.41.207.37,"Kazan, Gagarina st., 45",https://store.ru/cart,921e1d25-2c8a-3c96-636f-fd9ec879677e,2022-05-01,31,inactive
+1098,SKU-9906-A,57.197.166.98,"Kazan, Tverskaya st., 59",https://shop.com/checkout,659c8628-6713-acf4-ddd0-438405650f71,2022-05-14,30,active
+1099,SKU-7907-B,69.236.118.17,"Saint Petersburg, Mira st., 32",https://store.ru/user/profile,c01fcfd8-f512-4969-7179-a9fe99aa425c,2021-05-13,6,active
+1100,SKU-7602-C,201.135.42.193,"Moscow, Tverskaya st., 2",https://example.org/checkout,cfec7e93-521a-1a8a-350a-32ab9225799b,2024-10-25,5,inactive
+1101,SKU-5267-A,131.129.216.104,"Saint Petersburg, Lenina st., 41",https://example.org/checkout,d0bcafe1-3cad-ddc5-8c82-903a5ed8c86b,2023-04-19,47,inactive
+1102,SKU-8097-B,11.206.52.130,"Moscow, Lenina st., 87",https://shop.com/user/profile,5ab66b47-b2bd-c0d2-6658-22adc736c9ff,2023-07-15,19,active
+1103,SKU-2201-B,110.231.5.61,"Saint Petersburg, Mira st., 78",https://market.net/product/123,0d536c90-9eec-19a9-1c79-f1ad52eb3a29,2023-02-17,47,active
+1104,SKU-2306-C,97.152.55.162,"Moscow, Lenina st., 4",https://market.net/checkout,dba375a7-c298-f9e8-92b6-1c480fec2554,2020-11-05,36,inactive
+1105,SKU-4012-A,45.231.238.24,"Saint Petersburg, Baumana st., 78",https://store.ru/checkout,752663ce-787c-74a3-2742-fad930653e98,2023-06-09,18,inactive
+1106,SKU-3559-B,155.205.89.174,"Saint Petersburg, Gagarina st., 52",https://example.org/category/electronics,599f06dd-6aae-b4f9-a83d-1d921ce7aaad,2021-01-08,24,active
+1107,SKU-6319-C,204.219.148.155,"Novosibirsk, Lenina st., 58",https://store.ru/cart,5b3c8a09-6db4-73ee-29ef-93903ee4194e,2020-09-08,21,active
+1108,SKU-4248-B,37.115.184.203,"Moscow, Tverskaya st., 74",https://market.net/cart,d2c96b07-fb51-0a5a-6fb5-b562de1ae8bc,2022-03-20,43,active
+1109,SKU-9502-A,89.72.181.15,"Yekaterinburg, Tverskaya st., 63",https://market.net/product/123,3a191cf7-16b9-3964-4003-201c3891f320,2022-07-23,33,inactive
+1110,SKU-1272-B,55.191.172.207,"Moscow, Mira st., 7",https://store.ru/category/electronics,458f9a98-2dee-bf4c-29be-a5345d8331bc,2022-09-17,39,active
+1111,SKU-6404-B,197.211.82.114,"Moscow, Mira st., 12",https://store.ru/product/123,6ae069ef-768a-b88f-93fa-9cad6170e55e,2024-09-07,27,active
+1112,SKU-6064-C,155.186.96.182,"Moscow, Mira st., 8",https://example.org/checkout,1fff31f4-55ca-3851-da2f-852b98066de5,2021-09-29,35,active
+1113,SKU-8364-A,46.73.170.195,"Saint Petersburg, Mira st., 96",https://example.org/user/profile,cc082e84-dfdc-97b0-ca97-b3cdb48410cf,2023-08-14,47,active
+1114,SKU-5241-A,20.245.201.90,"Moscow, Gagarina st., 94",https://example.org/product/123,7e2d297b-81a2-ec25-d54a-aed41cf02db2,2021-07-26,28,active
+1115,SKU-4004-A,166.69.28.149,"Saint Petersburg, Baumana st., 63",https://market.net/user/profile,67983fe8-bf0c-2532-0fe9-65c4347d45ab,2023-12-06,44,active
+1116,SKU-4798-A,228.223.20.155,"Saint Petersburg, Lenina st., 37",https://market.net/category/electronics,ef031df0-a824-f752-1229-81b7cf66212f,2023-03-12,24,inactive
+1117,SKU-9335-B,19.247.105.235,"Yekaterinburg, Tverskaya st., 64",https://store.ru/product/123,7bca0d50-8a37-769a-4282-4acafa369882,2022-03-11,42,active
+1118,SKU-4791-A,130.181.4.180,"Kazan, Gagarina st., 73",https://example.org/category/electronics,090856d5-ba82-7134-14c9-02aa152fcc0e,2022-01-17,49,banned
+1119,SKU-9451-B,152.45.114.87,"Saint Petersburg, Baumana st., 3",https://shop.com/cart,5face9a2-ee73-5b9f-b63d-8e7dfe4fb1d0,2022-04-09,23,active
+1120,SKU-9871-B,8.206.172.102,"Kazan, Baumana st., 81",https://market.net/user/profile,92aba5e1-c5b5-4e89-4444-af3a44b226a1,2022-10-25,34,active
+1121,SKU-9939-C,78.58.194.17,"Novosibirsk, Lenina st., 91",https://shop.com/cart,34081809-989e-e987-4ca2-4a83d8110fa5,2024-02-23,26,active
+1122,SKU-7680-B,131.56.19.147,"Kazan, Lenina st., 64",https://store.ru/product/123,b8e52fca-7c4f-44d2-1679-b783c3c32b29,2021-02-10,45,active
+1123,SKU-7996-A,71.235.181.100,"Kazan, Mira st., 88",https://market.net/category/electronics,6cae2d66-ea26-0f6b-e811-96ccab0b2c5b,2021-07-22,8,inactive
+1124,SKU-8734-A,251.201.127.33,"Moscow, Lenina st., 41",https://store.ru/checkout,d2057b49-364b-5be5-022f-8b4573e9995d,2023-08-28,37,active
+1125,SKU-1697-A,20.209.119.236,"Novosibirsk, Gagarina st., 88",https://market.net/cart,6085d86a-3f67-0e44-49f6-aa44d9840d94,2021-12-17,42,active
+1126,SKU-5087-B,123.128.210.116,"Moscow, Gagarina st., 91",https://market.net/checkout,99784ea3-1f76-424c-9a12-bf0e6a8ed5c9,2023-03-14,16,active
+1127,SKU-3604-C,133.231.60.58,"Moscow, Gagarina st., 65",https://example.org/product/123,efb6957b-08d1-853f-8f80-b8bae4f11130,2024-12-02,20,active
+1128,SKU-3299-B,237.234.250.234,"Moscow, Tverskaya st., 6",https://shop.com/cart,53a08f72-6ee4-23c4-4d2d-280ff8d40978,2022-08-02,46,banned
+1129,SKU-4023-B,5.244.39.227,"Saint Petersburg, Gagarina st., 88",https://store.ru/category/electronics,46a7053d-f494-1ff9-6843-31ff219c9c9d,2024-04-10,35,active
+1130,SKU-2701-C,176.134.115.174,"Novosibirsk, Gagarina st., 40",https://market.net/product/123,dfdb69ef-0d01-3dbe-3c0a-d41375359c9e,2020-02-08,35,inactive
+1131,SKU-9330-C,166.135.20.77,"Saint Petersburg, Baumana st., 69",https://store.ru/category/electronics,8fcd76be-2f6b-123d-abb5-eaa64ef9fca3,2023-04-04,14,active
+1132,SKU-5776-C,46.252.214.7,"Yekaterinburg, Baumana st., 97",https://example.org/cart,ea41f225-6274-f783-87b9-27c5141def07,2022-09-05,4,active
+1133,SKU-5217-C,159.64.129.236,"Yekaterinburg, Mira st., 67",https://example.org/cart,4a244d81-3a69-8def-62f8-aecf3a438233,2020-05-28,43,active
+1134,SKU-1596-A,150.242.82.71,"Saint Petersburg, Mira st., 63",https://shop.com/category/electronics,624383b1-7c3a-c8d4-d975-bf6db5f69b8f,2021-03-29,5,inactive
+1135,SKU-5108-B,214.254.166.207,"Novosibirsk, Lenina st., 9",https://store.ru/cart,e21dff7e-9160-0236-6f11-8f1c86b9f668,2022-12-25,27,inactive
+1136,SKU-7361-C,102.198.45.146,"Yekaterinburg, Baumana st., 59",https://shop.com/category/electronics,e880a524-6f2c-bc37-77a7-4dfaeb1529c4,2020-03-04,47,active
+1137,SKU-9462-C,190.100.70.3,"Moscow, Mira st., 29",https://shop.com/cart,3db2cdee-2bcb-2535-f6d9-0c1ba5e8a5fc,2022-07-27,25,active
+1138,SKU-9239-B,117.93.168.96,"Moscow, Lenina st., 16",https://store.ru/checkout,0a06939b-0cfa-386d-1bfd-66502509d218,2022-10-10,31,active
+1139,SKU-7258-C,182.20.252.22,"Kazan, Gagarina st., 33",https://market.net/checkout,9993d3e9-8273-803e-4e2f-be636f7d8e7c,2024-12-09,24,active
+1140,SKU-6442-B,91.67.203.126,"Moscow, Lenina st., 16",https://market.net/cart,238e0daa-5c33-ae5a-1f71-6da98a7b0245,2024-11-09,10,active
+1141,SKU-5725-B,191.197.165.150,"Yekaterinburg, Baumana st., 6",https://store.ru/product/123,1f7442ce-71c6-c2b4-8250-4c3f1b3b4015,2022-11-29,1,active
+1142,SKU-2231-A,130.137.197.203,"Kazan, Baumana st., 71",https://store.ru/category/electronics,f3136a96-697f-61b3-5908-2e6429d1e2df,2024-07-19,19,active
+1143,SKU-1023-B,116.216.5.112,"Novosibirsk, Gagarina st., 19",https://store.ru/checkout,d68fef1b-5b62-8496-a501-f9da80c889d6,2023-01-28,31,active
+1144,SKU-4349-C,175.154.103.235,"Moscow, Baumana st., 33",https://example.org/category/electronics,c8702284-7e1e-431a-7cb3-475294217045,2022-11-06,34,active
+1145,SKU-3181-A,17.20.119.155,"Saint Petersburg, Mira st., 86",https://store.ru/checkout,3b465104-668d-a8a7-e5b8-32fefbc06bd2,2021-12-08,18,active
+1146,SKU-1398-A,105.198.164.109,"Novosibirsk, Tverskaya st., 21",https://example.org/product/123,3e36aae7-772b-ff93-f1c8-b4549bd39365,2023-11-14,18,banned
+1147,SKU-6917-B,73.191.125.214,"Moscow, Lenina st., 47",https://store.ru/product/123,3492af19-9c29-f61b-8ba7-040cb46d2c23,2020-10-21,29,active
+1148,SKU-6573-A,52.194.179.137,"Saint Petersburg, Gagarina st., 9",https://store.ru/user/profile,224772df-8eeb-baec-59e6-266f74e55fd5,2020-12-04,39,active
+1149,SKU-7865-A,242.184.236.181,"Yekaterinburg, Tverskaya st., 51",https://store.ru/checkout,4751a4dd-6815-07a2-7c69-b7e66a90d3b2,2023-04-06,38,active
+1150,SKU-1531-C,74.97.225.6,"Kazan, Mira st., 2",https://store.ru/product/123,41626f44-99e0-b3d0-3e7f-99ada4ad5921,2023-09-22,28,active
+1151,SKU-4235-A,233.242.214.119,"Novosibirsk, Mira st., 95",https://market.net/user/profile,422b9db3-7d84-458a-6975-9e17c5203a30,2020-06-04,18,active
+1152,SKU-1431-B,175.76.46.64,"Novosibirsk, Mira st., 2",https://example.org/user/profile,72d96247-72c6-8fee-a89d-ed28223b54fb,2024-12-17,26,active
+1153,SKU-3512-A,228.101.182.147,"Yekaterinburg, Lenina st., 4",https://shop.com/cart,b5c88270-8de9-843d-a2f4-4799947b0339,2023-12-19,5,active
+1154,SKU-7084-C,252.132.112.98,"Moscow, Mira st., 39",https://shop.com/category/electronics,203c61b9-5548-6617-1f37-9cac89cf3f1c,2021-01-31,40,active
+1155,SKU-2315-A,172.19.245.250,"Novosibirsk, Baumana st., 15",https://market.net/category/electronics,d2e2a43e-4c1e-59fd-3942-f31676c58815,2023-10-26,27,active
+1156,SKU-3179-C,26.4.224.234,"Yekaterinburg, Tverskaya st., 5",https://example.org/category/electronics,66d21816-58fa-e81c-416f-47171840c099,2020-10-15,3,active
+1157,SKU-3398-B,118.8.26.129,"Moscow, Baumana st., 49",https://market.net/checkout,8785b146-a3dc-aaa5-834a-9209bbc96628,2023-11-28,22,inactive
+1158,SKU-2155-A,241.200.7.169,"Novosibirsk, Tverskaya st., 98",https://store.ru/category/electronics,5411caa9-5199-efd2-f357-52f8e5d0f7f3,2021-06-19,24,active
+1159,SKU-6997-C,206.179.111.25,"Kazan, Mira st., 17",https://shop.com/checkout,6def695f-1384-17ac-9974-eb6250f5d879,2020-12-28,11,inactive
+1160,SKU-8791-B,187.220.139.166,"Saint Petersburg, Tverskaya st., 46",https://shop.com/user/profile,e0e44bf9-3026-e9f6-27aa-0484c6cdc59b,2021-11-12,38,active
+1161,SKU-3493-B,26.240.91.253,"Moscow, Baumana st., 9",https://store.ru/checkout,d2e57665-e4a1-45c5-88b9-c1b0aab24452,2022-11-30,34,active
+1162,SKU-2404-A,40.192.191.205,"Kazan, Mira st., 3",https://shop.com/product/123,a1f0c187-fe0b-f2c4-ca09-a2bf849a53b1,2022-12-08,3,inactive
+1163,SKU-5329-C,69.245.104.183,"Novosibirsk, Baumana st., 64",https://example.org/category/electronics,e5e6fa99-4910-9d3d-14b4-50785fd59929,2021-10-04,43,active
+1164,SKU-3329-B,21.155.65.134,"Moscow, Mira st., 72",https://shop.com/product/123,bef23af4-08ef-8d73-d8fc-c0e25f3bf186,2023-09-14,12,banned
+1165,SKU-1338-A,188.133.17.163,"Kazan, Tverskaya st., 93",https://example.org/cart,e094b030-acd6-eb0b-91fe-9f610e0a04b5,2022-05-21,37,inactive
+1166,SKU-5916-C,92.159.175.1,"Saint Petersburg, Gagarina st., 19",https://market.net/category/electronics,42d4b714-7c04-aa67-11b9-fc99fc1bded1,2022-03-12,35,inactive
+1167,SKU-6177-A,71.38.176.106,"Kazan, Tverskaya st., 70",https://example.org/category/electronics,d3b50935-3062-8701-0b48-83f0af2df4f8,2023-05-28,39,active
+1168,SKU-6163-A,26.73.243.172,"Yekaterinburg, Baumana st., 81",https://shop.com/product/123,f27bfbdf-1e5d-02f6-60c7-d4d72c5d4f8a,2023-07-26,49,active
+1169,SKU-7228-B,101.252.171.68,"Moscow, Tverskaya st., 6",https://example.org/checkout,45fb8fb8-6b33-f59c-3fc0-85fafb44a754,2024-11-15,26,active
+1170,SKU-4270-A,41.206.78.95,"Moscow, Mira st., 54",https://shop.com/checkout,5114884d-2f41-8e5b-587c-f50876898adc,2020-04-28,20,inactive
+1171,SKU-2583-B,65.184.37.23,"Saint Petersburg, Lenina st., 83",https://example.org/cart,18309490-39a3-7589-d003-ebed5a3345ba,2024-10-22,41,inactive
+1172,SKU-5049-B,149.159.162.133,"Kazan, Baumana st., 27",https://market.net/product/123,02ed18e2-fe97-2d90-0027-00e1a41a938e,2021-01-30,41,active
+1173,SKU-7200-C,63.211.249.31,"Moscow, Baumana st., 56",https://example.org/checkout,980a9681-22d9-ba0a-996a-875ae124a2e3,2020-08-11,47,active
+1174,SKU-1292-C,79.133.106.220,"Yekaterinburg, Tverskaya st., 88",https://shop.com/user/profile,a7f7f2b5-d7d2-cfa2-1072-74a9a6b1d863,2023-04-30,28,active
+1175,SKU-6051-A,246.177.101.41,"Novosibirsk, Gagarina st., 39",https://example.org/user/profile,4dc833ec-ca15-89a5-a508-5792d0a69376,2021-03-18,25,active
+1176,SKU-8801-C,190.217.245.59,"Kazan, Gagarina st., 37",https://store.ru/user/profile,5d95721b-3379-d06a-69a6-27b20ff34f86,2023-04-01,46,active
+1177,SKU-3593-A,159.18.242.22,"Moscow, Lenina st., 3",https://market.net/user/profile,d7aaceb4-2a47-5ad2-d1fa-0ec804d25ff5,2022-04-01,33,active
+1178,SKU-3706-C,201.199.117.214,"Moscow, Tverskaya st., 76",https://example.org/checkout,8eb2dd94-d80a-b238-234c-2b0042a8c9c2,2024-11-11,27,active
+1179,SKU-9266-A,16.224.91.192,"Yekaterinburg, Lenina st., 28",https://shop.com/product/123,f595e9b5-17e4-2980-5391-8cd8c3052c15,2023-11-06,6,active
+1180,SKU-5276-C,32.227.39.236,"Novosibirsk, Baumana st., 36",https://market.net/user/profile,127738ef-70a6-5641-e12a-a33ac8a8cac5,2022-04-05,34,active
+1181,SKU-2622-C,76.136.175.161,"Saint Petersburg, Mira st., 22",https://shop.com/category/electronics,e857359d-5a90-8923-7192-3839f8472850,2023-05-11,33,active
+1182,SKU-3026-C,142.243.153.131,"Kazan, Tverskaya st., 66",https://shop.com/category/electronics,b127307c-b2f4-12db-86ee-a11362199fb4,2020-03-25,12,inactive
+1183,SKU-2200-C,19.61.116.239,"Kazan, Lenina st., 46",https://market.net/user/profile,47b8f25d-07ff-3206-dfdb-e4a5471774f2,2022-08-12,36,active
+1184,SKU-7486-A,133.12.53.149,"Moscow, Mira st., 84",https://store.ru/user/profile,1fabaf30-b91f-840d-158c-58d0b8ad980e,2024-02-03,49,active
+1185,SKU-8259-B,37.237.52.190,"Yekaterinburg, Lenina st., 82",https://store.ru/category/electronics,7585829a-4644-1fd3-6c34-1a230bade862,2022-07-10,39,active
+1186,SKU-5283-C,192.154.147.124,"Saint Petersburg, Tverskaya st., 17",https://example.org/user/profile,c800d971-3a7a-5124-728e-ddc0b6f71122,2022-02-08,45,active
+1187,SKU-7203-A,51.69.115.144,"Kazan, Baumana st., 1",https://store.ru/product/123,6e3e3586-d63e-489b-a6ef-05ac4bd31f47,2021-04-13,49,inactive
+1188,SKU-3066-B,220.188.250.143,"Yekaterinburg, Mira st., 41",https://store.ru/category/electronics,3b3e805c-7f70-73f5-ee5a-3ee9d0f450ea,2022-04-20,11,active
+1189,SKU-4649-A,114.195.123.246,"Saint Petersburg, Gagarina st., 43",https://shop.com/product/123,b713445a-08db-dc76-5435-715e2bc15029,2023-11-25,45,active
+1190,SKU-5906-A,138.163.238.180,"Novosibirsk, Lenina st., 27",https://store.ru/checkout,3974dd17-f555-272d-fc94-154d600c7cb9,2023-07-26,48,inactive
+1191,SKU-9841-B,95.216.236.141,"Moscow, Gagarina st., 95",https://example.org/product/123,49538b86-9fe9-e883-6624-b3e7b6104a8f,2020-09-01,6,inactive
+1192,SKU-1062-B,215.73.123.202,"Yekaterinburg, Baumana st., 14",https://shop.com/cart,577f48dc-e654-0fd4-c0f0-743a877b8816,2021-08-20,25,active
+1193,SKU-7694-B,49.210.234.249,"Kazan, Baumana st., 77",https://example.org/cart,355d9527-098c-bf49-ece3-ef4d3e20917b,2021-12-24,25,banned
+1194,SKU-5585-B,39.5.92.129,"Saint Petersburg, Baumana st., 49",https://market.net/category/electronics,644d79f9-a44f-05b6-e2bb-5483d16baf95,2022-01-14,17,active
+1195,SKU-1228-B,132.15.169.127,"Yekaterinburg, Mira st., 81",https://shop.com/checkout,31681f27-5963-68c5-f761-5607d790a459,2024-10-23,29,inactive
+1196,SKU-4620-C,88.121.143.56,"Saint Petersburg, Tverskaya st., 61",https://example.org/checkout,532a3d94-7444-d35e-533f-3748ff20a4e8,2024-01-18,3,active
+1197,SKU-6250-A,192.254.90.189,"Kazan, Mira st., 4",https://example.org/category/electronics,094ff4c3-6fd9-2a57-c0c3-bd03916e9f2d,2021-04-21,2,active
+1198,SKU-8679-A,16.98.141.202,"Novosibirsk, Lenina st., 52",https://market.net/category/electronics,91c9a36c-0c13-dcf3-53d0-cea5c2ebca12,2023-03-17,21,inactive
+1199,SKU-9962-B,79.62.220.73,"Saint Petersburg, Tverskaya st., 80",https://store.ru/user/profile,799bd45f-d4db-5a3f-53a7-ccd7636a3060,2021-03-10,44,active
+1200,SKU-8633-C,53.197.22.177,"Moscow, Lenina st., 70",https://store.ru/checkout,565e3ba4-b8ab-5bd4-5970-885cbad62b00,2022-03-18,24,active
+1201,SKU-7501-B,119.200.217.99,"Kazan, Baumana st., 47",https://example.org/user/profile,72656985-2c2b-a5e8-078e-38caa4b27341,2022-12-15,49,banned
+1202,SKU-1201-A,64.47.183.111,"Saint Petersburg, Mira st., 59",https://market.net/product/123,1cd69240-9335-0199-c727-e9cc1a5f4aa9,2022-01-21,29,active
+1203,SKU-8858-C,205.188.254.215,"Yekaterinburg, Baumana st., 7",https://shop.com/user/profile,2276e7a1-e40d-b9b2-0bed-dc20cab55134,2022-06-20,14,active
+1204,SKU-5159-C,233.230.232.253,"Kazan, Gagarina st., 67",https://example.org/user/profile,3e028f7f-1aba-b43e-1542-4fe288359049,2022-08-09,15,inactive
+1205,SKU-6910-C,97.79.152.213,"Moscow, Gagarina st., 66",https://shop.com/user/profile,56de52b4-4aa5-3864-d847-620c689a305a,2020-08-26,8,active
+1206,SKU-5799-A,46.254.76.72,"Moscow, Tverskaya st., 65",https://market.net/cart,06db0e43-4ab4-816f-89e4-f1734937d545,2021-04-28,46,active
+1207,SKU-4671-A,101.1.101.37,"Moscow, Mira st., 93",https://market.net/checkout,9e8113b0-4820-5e21-d3cb-ba7fd9da8cd2,2022-11-12,47,banned
+1208,SKU-8763-C,204.198.161.205,"Saint Petersburg, Mira st., 21",https://market.net/cart,f0e675a9-7817-b8f9-beb2-7f45279fd3df,2022-12-31,32,banned
+1209,SKU-2826-C,42.66.224.239,"Kazan, Tverskaya st., 21",https://shop.com/user/profile,83a93978-b3a5-73c3-5a5d-799fb5293d7a,2024-09-05,20,active
+1210,SKU-3965-A,69.60.29.186,"Novosibirsk, Lenina st., 22",https://store.ru/category/electronics,836012e8-35e8-677b-50b7-fe2e6991b8d8,2020-03-03,23,active
+1211,SKU-3449-B,168.47.156.193,"Saint Petersburg, Lenina st., 35",https://shop.com/checkout,205a7e14-98d8-2ff6-a083-537cce6e2916,2024-08-10,14,active
+1212,SKU-3155-A,76.12.56.150,"Kazan, Tverskaya st., 91",https://market.net/product/123,f8436983-9d38-4ab0-41d8-5fd56a877517,2020-09-11,43,active
+1213,SKU-7293-B,132.88.141.168,"Saint Petersburg, Baumana st., 5",https://example.org/category/electronics,efc05cb6-faa1-30c6-c3f5-6e92c1f1cedc,2023-08-31,5,active
+1214,SKU-7275-A,242.226.174.82,"Kazan, Tverskaya st., 30",https://market.net/cart,46dd5bc8-8f41-0c91-4f66-b4188acaa65b,2022-02-28,4,active
+1215,SKU-1878-A,102.242.84.115,"Yekaterinburg, Tverskaya st., 68",https://market.net/product/123,00d778bb-4abf-18b9-d79c-f244ebe76b27,2024-12-19,45,inactive
+1216,SKU-4257-A,252.101.200.52,"Novosibirsk, Gagarina st., 10",https://shop.com/category/electronics,7aa77983-ab67-5891-337f-7006d661fcd8,2021-01-05,13,inactive
+1217,SKU-4559-C,102.14.214.16,"Novosibirsk, Mira st., 32",https://store.ru/checkout,1dd922a4-49fe-0ed9-5e28-2982e72735a7,2020-04-01,5,active
+1218,SKU-5139-B,210.216.41.2,"Yekaterinburg, Gagarina st., 87",https://store.ru/checkout,91439164-9ac9-f486-5310-2a90269d29cc,2022-10-24,2,inactive
+1219,SKU-8103-A,245.165.148.155,"Yekaterinburg, Lenina st., 92",https://store.ru/user/profile,429eecc8-f069-8580-077e-ffa18869664e,2023-10-01,33,active
+1220,SKU-2298-B,192.149.193.117,"Kazan, Baumana st., 2",https://shop.com/user/profile,728b8574-1a9e-223c-719b-7c588e215358,2024-02-06,30,inactive
+1221,SKU-6593-B,6.16.192.49,"Yekaterinburg, Tverskaya st., 74",https://shop.com/category/electronics,a30620c4-bdc4-a547-ea1b-62b434e23c9d,2024-07-18,9,active
+1222,SKU-2076-B,26.177.40.227,"Yekaterinburg, Lenina st., 3",https://example.org/checkout,2b8ba481-b4b1-3d26-0658-063d8d35d0f4,2023-07-06,44,active
+1223,SKU-9317-B,80.122.110.100,"Kazan, Mira st., 28",https://market.net/product/123,3c9e970c-55fa-7c98-62ae-62b0c6b804f2,2024-12-21,14,active
+1224,SKU-9085-B,157.212.62.11,"Novosibirsk, Lenina st., 34",https://shop.com/checkout,e09ece0f-6b76-4dc9-9ef6-379a17e8cc63,2020-03-10,20,active
+1225,SKU-4602-A,185.152.114.247,"Kazan, Baumana st., 63",https://market.net/product/123,b81c11e8-614a-25de-54e4-fe1b3ca08342,2021-10-09,36,active
+1226,SKU-5681-B,86.109.219.77,"Moscow, Tverskaya st., 28",https://store.ru/product/123,d61ef2d5-2b3e-7503-0d64-2ffc29c47d55,2020-07-16,15,active
+1227,SKU-1950-C,252.94.187.146,"Saint Petersburg, Gagarina st., 39",https://example.org/user/profile,1a85c421-b97a-ed81-2b34-96fcb205d601,2023-08-01,39,active
+1228,SKU-2377-B,198.224.39.186,"Novosibirsk, Lenina st., 1",https://shop.com/checkout,790b56bd-ada3-3c22-46d7-d31edc52b047,2022-05-19,6,active
+1229,SKU-3793-C,107.87.195.98,"Novosibirsk, Baumana st., 23",https://shop.com/category/electronics,34e362a3-f2fd-c807-4181-57df359eb2c3,2022-09-07,13,active
+1230,SKU-6795-A,42.161.241.160,"Novosibirsk, Baumana st., 41",https://example.org/checkout,6522a3f9-8be2-1473-5588-dfd8a9690a03,2021-06-09,38,active
+1231,SKU-1245-A,80.29.67.147,"Yekaterinburg, Mira st., 92",https://example.org/category/electronics,02a15f5f-fd2d-d2ee-7914-b05c9d0d6f13,2024-05-25,12,active
+1232,SKU-8383-C,69.190.95.33,"Saint Petersburg, Tverskaya st., 40",https://market.net/cart,698ff26d-0e05-5198-b002-2ef6b1c3f3c7,2022-05-12,28,active
+1233,SKU-5957-B,165.197.226.38,"Saint Petersburg, Baumana st., 27",https://store.ru/checkout,f1173a31-6999-0cde-ffac-3211262ed69f,2020-01-15,14,active
+1234,SKU-6819-B,206.22.237.142,"Yekaterinburg, Lenina st., 50",https://store.ru/product/123,2d594c96-d09b-8b4e-10f0-d720caaed5ca,2020-11-20,29,active
+1235,SKU-5597-B,42.199.206.157,"Saint Petersburg, Lenina st., 70",https://store.ru/category/electronics,67d02303-177a-519a-02a8-1801bbfa0918,2023-01-06,26,inactive
+1236,SKU-5414-A,115.154.194.24,"Saint Petersburg, Baumana st., 86",https://example.org/category/electronics,121ea1ac-b814-a0cc-5aa2-27c4091ab984,2023-03-13,10,active
+1237,SKU-7729-C,3.147.213.131,"Moscow, Tverskaya st., 20",https://example.org/checkout,d3d73911-bfe2-a5b9-a8a2-17682407fdbd,2023-11-12,28,inactive
+1238,SKU-7450-B,5.3.154.195,"Moscow, Lenina st., 4",https://store.ru/category/electronics,c5d20ea7-93f7-7e67-7842-e1c06d83da25,2021-01-18,30,banned
+1239,SKU-4559-B,136.56.66.118,"Novosibirsk, Gagarina st., 13",https://example.org/checkout,357e2dee-df4b-daba-6d2e-8de3ecaf4394,2020-07-28,36,active
+1240,SKU-6422-C,36.116.40.173,"Novosibirsk, Tverskaya st., 20",https://example.org/checkout,da24e185-6668-c530-3657-b6eedea6e2d9,2022-03-16,47,inactive
+1241,SKU-1079-C,186.219.51.199,"Novosibirsk, Mira st., 9",https://store.ru/category/electronics,741b1cc0-add3-3cb5-16da-d05c16bb00cc,2020-05-22,5,banned
+1242,SKU-8758-C,210.54.226.59,"Moscow, Gagarina st., 83",https://store.ru/category/electronics,b4b7f424-e9e1-fa6e-693e-51489220310d,2023-03-28,23,active
+1243,SKU-3499-B,73.109.207.93,"Moscow, Gagarina st., 63",https://store.ru/product/123,365895a9-36ac-fc48-c9c3-32367c7962ca,2024-03-19,31,banned
+1244,SKU-5917-A,205.183.148.140,"Moscow, Lenina st., 1",https://market.net/cart,c8935765-daa6-dbc2-5640-32ff28a149cc,2022-02-12,8,active
+1245,SKU-4215-A,126.114.77.154,"Moscow, Lenina st., 70",https://shop.com/cart,3e4830e7-ff1f-4cd5-db82-5a0e6f12389d,2020-04-07,9,active
+1246,SKU-2071-B,15.97.113.218,"Kazan, Tverskaya st., 98",https://store.ru/checkout,6895d161-3a78-7295-ae74-9b88b7279151,2024-08-26,23,active
+1247,SKU-3842-A,227.190.45.203,"Novosibirsk, Tverskaya st., 90",https://example.org/cart,b56d2d8e-d460-f6a6-9c9f-684b88f70716,2024-09-18,12,active
+1248,SKU-8519-A,201.252.154.175,"Yekaterinburg, Lenina st., 43",https://example.org/user/profile,563300ed-6cb6-4818-4e52-38598f9fac5b,2021-09-19,49,active
+1249,SKU-3084-A,81.166.127.195,"Kazan, Gagarina st., 72",https://shop.com/user/profile,916ebfa7-5914-b93c-b01c-ff0ec099fae4,2023-09-21,1,banned
+1250,SKU-5647-C,16.161.150.243,"Novosibirsk, Lenina st., 31",https://shop.com/product/123,e188b264-e011-5308-34c5-c996af200e8b,2020-12-29,19,active
+1251,SKU-1252-A,252.103.133.94,"Kazan, Lenina st., 3",https://shop.com/cart,ff38b80c-20d5-04d8-e203-44bd3413ffe6,2023-12-06,1,active
+1252,SKU-3997-A,13.21.23.240,"Kazan, Lenina st., 76",https://shop.com/checkout,0ef70985-7c0e-7794-2605-807a75689e6d,2020-06-23,11,inactive
+1253,SKU-1066-C,106.20.69.232,"Saint Petersburg, Mira st., 67",https://market.net/cart,4bf6abf0-f578-ca19-dda9-634946f57a36,2023-07-19,20,inactive
+1254,SKU-3012-B,190.90.88.252,"Novosibirsk, Gagarina st., 92",https://shop.com/category/electronics,52cf19f2-1846-e406-9c7e-b9ae7516790f,2021-05-11,16,active
+1255,SKU-8957-C,107.33.171.62,"Novosibirsk, Mira st., 87",https://market.net/product/123,362e8020-e7e7-e6b2-c1b2-e3ec0bf525bd,2022-07-12,20,active
+1256,SKU-1380-B,162.201.144.99,"Novosibirsk, Mira st., 3",https://market.net/checkout,4ebbd6b2-bd83-5ae5-5e9c-f9b5078f89ed,2023-03-02,2,inactive
+1257,SKU-1451-C,156.112.154.52,"Moscow, Gagarina st., 64",https://example.org/product/123,7dd22825-4763-fa97-77d6-9fbe032f9f0c,2024-03-19,10,banned
+1258,SKU-5170-C,194.39.72.219,"Moscow, Lenina st., 64",https://store.ru/cart,d403b0e3-9af5-1d09-af50-92f2eca65e56,2022-04-28,36,active
+1259,SKU-4605-B,135.150.175.200,"Saint Petersburg, Mira st., 82",https://store.ru/user/profile,307cf8f3-20b9-69da-cfbd-b3843899e4f4,2022-07-09,49,inactive
+1260,SKU-1565-C,21.93.187.124,"Saint Petersburg, Baumana st., 47",https://store.ru/checkout,39d66226-24e2-3856-a78c-3aaa67afc0a8,2020-11-30,46,active
+1261,SKU-8721-B,117.233.246.230,"Kazan, Gagarina st., 20",https://market.net/product/123,203f7478-83fd-9b52-7559-2e7d9d83d6e5,2021-10-20,45,banned
+1262,SKU-3088-B,14.151.34.174,"Kazan, Gagarina st., 27",https://shop.com/user/profile,c80a112b-67dc-57c5-4c89-bda9494c6e4e,2022-06-26,33,active
+1263,SKU-4929-C,64.19.165.88,"Yekaterinburg, Tverskaya st., 67",https://store.ru/checkout,eaaccb6f-0d9c-aaf4-517d-0726b3a986a7,2022-02-15,32,active
+1264,SKU-3681-B,237.144.25.113,"Novosibirsk, Gagarina st., 63",https://store.ru/checkout,1a1ac8a0-a2fd-167e-eb05-892b486aab3a,2022-10-15,42,banned
+1265,SKU-8286-A,213.78.170.179,"Moscow, Lenina st., 32",https://market.net/category/electronics,e2d27c55-ed56-b11e-9b11-d34a7c485065,2024-12-04,9,banned
+1266,SKU-7992-B,75.60.189.232,"Saint Petersburg, Baumana st., 38",https://shop.com/user/profile,1b4dc058-8123-9d8e-dd04-198b50fc6d56,2020-07-02,3,active
+1267,SKU-2838-A,103.52.132.183,"Novosibirsk, Tverskaya st., 10",https://market.net/checkout,2321536d-7c26-808f-49c0-42969b0d1388,2022-05-16,18,active
+1268,SKU-8955-C,152.126.50.187,"Kazan, Lenina st., 99",https://market.net/category/electronics,b4858c79-9408-30b3-1e5f-e8b5c94bf1a4,2020-01-09,9,active
+1269,SKU-1568-B,143.103.168.90,"Yekaterinburg, Baumana st., 15",https://shop.com/category/electronics,8c644bb7-5311-ad34-12f1-3badc8b64e1f,2020-08-07,29,active
+1270,SKU-1841-A,43.164.68.245,"Yekaterinburg, Gagarina st., 62",https://example.org/product/123,5b983424-5ccd-ff34-6737-032c1e009344,2021-04-26,27,active
+1271,SKU-1519-C,83.175.49.5,"Kazan, Gagarina st., 87",https://store.ru/product/123,0c868e59-301e-6829-88c6-44b6867ae64f,2024-09-19,1,inactive
+1272,SKU-5562-C,251.7.1.55,"Moscow, Tverskaya st., 39",https://shop.com/product/123,9e90b4dc-5b2d-801a-accb-bef780caddf4,2024-04-11,27,active
+1273,SKU-7948-C,20.90.193.41,"Novosibirsk, Baumana st., 95",https://example.org/product/123,3d4e22b8-89b8-5b66-6b72-6ce281cec7f8,2020-01-03,14,active
+1274,SKU-1960-B,254.243.100.68,"Kazan, Gagarina st., 68",https://shop.com/user/profile,73955995-4bed-6a5d-fd9f-20b20bac58e8,2023-08-10,6,active
+1275,SKU-6068-B,26.116.143.36,"Saint Petersburg, Gagarina st., 96",https://market.net/checkout,008194a1-ccd0-2194-4c6e-dcb5284311a0,2020-07-07,11,banned
+1276,SKU-2248-A,246.77.153.139,"Yekaterinburg, Mira st., 60",https://example.org/cart,154ddc17-ef72-a16d-9fbd-d6011800671b,2022-08-26,13,inactive
+1277,SKU-6515-A,176.106.218.23,"Novosibirsk, Gagarina st., 27",https://market.net/cart,25561ef8-dc97-fd04-5284-17993b48a1e2,2021-11-16,2,inactive
+1278,SKU-9428-A,165.190.198.247,"Yekaterinburg, Gagarina st., 47",https://example.org/user/profile,2e70c264-f5eb-84aa-bcef-df7422358a17,2024-02-03,20,active
+1279,SKU-9346-B,234.60.95.57,"Yekaterinburg, Baumana st., 64",https://store.ru/category/electronics,4e593219-021c-b5da-c654-c661985dd342,2022-07-05,22,active
+1280,SKU-4803-C,27.192.235.116,"Saint Petersburg, Lenina st., 91",https://market.net/cart,10c47c6c-bdff-aca3-fec3-ed3e080b61ed,2023-09-23,12,active
+1281,SKU-9098-A,229.10.193.13,"Yekaterinburg, Baumana st., 6",https://shop.com/product/123,82031df3-e3b6-7677-5d29-2cc0980cb9d4,2023-08-12,43,active
+1282,SKU-4983-A,162.250.100.184,"Saint Petersburg, Lenina st., 65",https://shop.com/product/123,8f7113c4-7236-c015-03b2-9c1bd554d70f,2024-07-13,16,active
+1283,SKU-7300-C,199.131.107.41,"Yekaterinburg, Tverskaya st., 62",https://example.org/product/123,ba95b2cf-545f-3a3d-0162-f12965dbecc3,2023-05-19,19,active
+1284,SKU-2273-C,179.232.95.96,"Kazan, Tverskaya st., 87",https://market.net/cart,19d4a1a4-6be3-e7d6-dc80-8ce155d88ea5,2023-04-07,8,active
+1285,SKU-9821-C,46.83.159.201,"Kazan, Lenina st., 99",https://example.org/cart,17c5503a-61c6-2bf6-3768-b7e0e68b388c,2021-10-31,39,active
+1286,SKU-8221-C,238.208.129.5,"Moscow, Mira st., 17",https://example.org/cart,29c384c6-3272-46a8-ef78-d5644c3b7f0b,2022-08-11,26,active
+1287,SKU-3507-C,49.140.159.90,"Saint Petersburg, Baumana st., 25",https://example.org/checkout,8f7dca30-8c40-3bba-bacb-3b2c52baf28b,2020-08-24,34,active
+1288,SKU-3763-B,149.247.189.80,"Saint Petersburg, Lenina st., 15",https://market.net/product/123,1deb9672-7e1d-ecb2-be73-43ce6d84f18f,2023-12-07,2,active
+1289,SKU-7325-C,250.76.36.168,"Saint Petersburg, Tverskaya st., 20",https://market.net/cart,901f344d-6506-a93d-f205-7030e532c101,2020-03-15,28,inactive
+1290,SKU-3933-B,187.230.23.164,"Saint Petersburg, Lenina st., 97",https://shop.com/user/profile,1da70140-1e70-6792-571e-37daa55ee4ca,2020-08-12,12,active
+1291,SKU-5275-B,245.142.220.31,"Novosibirsk, Gagarina st., 53",https://shop.com/checkout,14d2eb65-0063-df7a-f627-697ec71a3a08,2022-02-09,21,banned
+1292,SKU-3943-C,4.65.232.203,"Novosibirsk, Lenina st., 71",https://store.ru/checkout,460857e9-7417-068c-098c-5c90cc455e66,2022-03-06,36,inactive
+1293,SKU-3178-B,187.34.239.239,"Yekaterinburg, Baumana st., 44",https://market.net/cart,04e92dca-17b6-c59f-0f74-8f009feb202a,2024-11-22,15,inactive
+1294,SKU-2340-C,96.241.63.163,"Yekaterinburg, Tverskaya st., 63",https://store.ru/product/123,d12230d8-e687-6d60-40ac-87dcfd84ba38,2023-03-31,4,inactive
+1295,SKU-8250-B,129.77.51.235,"Novosibirsk, Baumana st., 6",https://example.org/user/profile,2b15d501-6c8d-7d5b-a194-eb7bdfd6459d,2022-03-17,39,active
+1296,SKU-1557-A,215.203.90.188,"Moscow, Tverskaya st., 50",https://example.org/category/electronics,c5a0817b-2786-44e0-9a1e-e01dd200d083,2024-10-04,27,active
+1297,SKU-3280-A,243.36.198.156,"Novosibirsk, Baumana st., 31",https://market.net/product/123,8cd3068b-97a6-518e-53e5-10db53a248d7,2024-10-19,14,inactive
+1298,SKU-3028-B,122.208.153.59,"Novosibirsk, Gagarina st., 51",https://store.ru/cart,a0a55e47-8a26-64f0-8470-646e980997f7,2022-11-03,41,active
+1299,SKU-6256-C,173.65.93.114,"Kazan, Gagarina st., 99",https://shop.com/product/123,7f5b9f80-574f-f2c7-1488-59822a38437a,2021-06-07,1,active
+1300,SKU-9395-C,129.204.63.25,"Saint Petersburg, Tverskaya st., 89",https://example.org/category/electronics,d86778b4-8f75-10ab-f4b2-d6a9f9045862,2022-01-27,11,inactive
+1301,SKU-5263-B,173.179.35.147,"Yekaterinburg, Mira st., 69",https://example.org/cart,4336839e-55b0-dfce-d9d3-6dcdef180501,2024-08-12,31,banned
+1302,SKU-8828-A,123.180.20.40,"Kazan, Mira st., 52",https://store.ru/product/123,6d81306f-4f36-8af3-797d-573855a77f99,2023-04-17,43,active
+1303,SKU-7579-B,26.246.174.40,"Moscow, Baumana st., 30",https://shop.com/user/profile,54d82e10-4dda-d831-d049-930c570b668c,2021-05-24,49,active
+1304,SKU-5429-A,2.210.122.3,"Moscow, Tverskaya st., 11",https://example.org/category/electronics,8cc1aacb-f92e-016d-a84d-f8a04688837c,2022-06-27,0,active
+1305,SKU-3559-A,168.183.104.78,"Yekaterinburg, Mira st., 29",https://market.net/cart,acd0cd0d-8721-4a30-91ed-fd7a683fe127,2023-07-01,36,active
+1306,SKU-1372-B,40.96.195.224,"Saint Petersburg, Lenina st., 27",https://market.net/checkout,2b982854-de5a-0d2b-4c7d-6142cf54ecdc,2022-01-31,27,inactive
+1307,SKU-6123-B,54.100.116.136,"Kazan, Gagarina st., 88",https://market.net/cart,f0842954-c46e-7117-887e-0a2d1dcdb511,2022-12-20,22,active
+1308,SKU-9109-B,101.157.166.3,"Yekaterinburg, Baumana st., 25",https://market.net/user/profile,2b2dece9-fb8e-612c-83af-38b50583910b,2024-12-25,29,active
+1309,SKU-1652-A,4.176.205.241,"Moscow, Lenina st., 33",https://shop.com/checkout,63faa618-b12b-0ca9-cf99-5899979bb175,2020-09-03,43,active
+1310,SKU-4309-A,135.102.47.214,"Saint Petersburg, Gagarina st., 61",https://store.ru/checkout,10b2bba4-b5e8-cea1-43f2-cca1b141b605,2023-05-25,0,active
+1311,SKU-8751-C,31.58.121.139,"Kazan, Baumana st., 22",https://store.ru/cart,adcf60ac-7865-51b2-4da3-0370f3a7f6ca,2024-05-11,43,active
+1312,SKU-9672-B,145.62.62.53,"Saint Petersburg, Lenina st., 41",https://market.net/checkout,ff289799-571c-9b22-13df-61b6436910cb,2022-09-07,28,active
+1313,SKU-5396-C,79.162.54.8,"Kazan, Mira st., 2",https://store.ru/product/123,60c6948a-92a1-9f6a-b35f-63d26184880c,2022-06-19,25,active
+1314,SKU-6723-C,165.252.190.179,"Kazan, Gagarina st., 2",https://shop.com/user/profile,9ff47235-995e-9fea-7d9d-c43522055ffe,2021-08-14,30,active
+1315,SKU-2753-A,102.68.167.154,"Yekaterinburg, Baumana st., 17",https://example.org/category/electronics,44ad0ead-9676-9180-7016-a375571d7a89,2022-08-19,18,active
+1316,SKU-1508-B,192.14.60.169,"Yekaterinburg, Gagarina st., 34",https://example.org/product/123,7933c93c-4a7c-3365-e8a8-e743abf2dffc,2023-10-06,0,inactive
+1317,SKU-8093-B,232.215.190.206,"Saint Petersburg, Tverskaya st., 27",https://example.org/category/electronics,1d4f593a-3bc2-3e8a-b4c0-217c2269dd75,2023-11-01,9,active
+1318,SKU-5934-A,238.32.199.38,"Moscow, Baumana st., 26",https://store.ru/category/electronics,af06a025-a2eb-8a6a-ff2f-aacae7723032,2023-03-08,43,active
+1319,SKU-2145-A,114.167.87.73,"Moscow, Lenina st., 31",https://example.org/user/profile,29e39e08-86a8-6ca9-583e-fdb90ea7a0fe,2023-02-20,36,active
+1320,SKU-4306-C,60.237.7.146,"Yekaterinburg, Mira st., 78",https://shop.com/category/electronics,aaa31960-60af-e68c-6221-7fc15501a418,2024-01-08,0,inactive
+1321,SKU-7658-C,31.143.188.193,"Kazan, Gagarina st., 96",https://shop.com/category/electronics,2e19602f-c289-f716-1b69-44d699d3fcb1,2020-06-11,8,active
+1322,SKU-3678-B,50.225.83.118,"Saint Petersburg, Lenina st., 21",https://store.ru/user/profile,88451dca-93ff-52cf-3009-87193e25d1ca,2022-10-05,42,inactive
+1323,SKU-9628-C,231.143.215.20,"Saint Petersburg, Tverskaya st., 54",https://example.org/user/profile,0a6ef44b-a59d-7c35-3d19-4619ab21ed8f,2024-11-29,12,active
+1324,SKU-7202-B,215.235.34.228,"Saint Petersburg, Mira st., 69",https://example.org/cart,86c2a5ef-a63b-698b-6e65-5fd687af0221,2021-09-08,43,banned
+1325,SKU-1954-C,142.13.185.90,"Novosibirsk, Lenina st., 24",https://example.org/user/profile,e38b8800-edce-a832-9fde-38aad555f9e1,2023-11-22,30,active
+1326,SKU-4327-A,61.227.73.150,"Novosibirsk, Tverskaya st., 13",https://store.ru/product/123,a3021a25-381b-8299-97bc-9258b6d202d5,2022-03-15,34,active
+1327,SKU-7514-B,78.81.142.90,"Saint Petersburg, Baumana st., 40",https://example.org/checkout,bf6bad47-2cdb-e0b7-1a5b-4acf6e58eb71,2021-06-18,31,inactive
+1328,SKU-2521-C,131.169.133.176,"Yekaterinburg, Tverskaya st., 98",https://example.org/product/123,4fff36b6-e8c5-50bf-caad-e64afd498cbc,2021-12-05,23,active
+1329,SKU-4551-C,208.37.29.114,"Moscow, Mira st., 74",https://example.org/product/123,3d274ed4-a9a9-488f-cf78-fa3e784a7722,2024-02-05,49,active
+1330,SKU-4650-A,181.212.115.212,"Yekaterinburg, Lenina st., 62",https://market.net/user/profile,d00ea869-ca59-3ad2-4209-0ef1bfbd09b5,2023-02-06,49,inactive
+1331,SKU-8217-C,48.178.173.206,"Yekaterinburg, Lenina st., 53",https://example.org/user/profile,0a2e322b-ca5c-c5e1-f2b4-51ee2c7e07b7,2023-10-01,4,active
+1332,SKU-3825-B,3.175.134.213,"Yekaterinburg, Tverskaya st., 61",https://example.org/checkout,f179d0b5-a384-097b-3889-a2d14c3ca494,2021-10-11,21,inactive
+1333,SKU-5976-C,213.90.143.19,"Novosibirsk, Tverskaya st., 18",https://market.net/cart,caa90316-1242-25b2-211b-d4311a194dd9,2021-07-04,31,active
+1334,SKU-5518-C,27.24.162.151,"Yekaterinburg, Baumana st., 49",https://store.ru/user/profile,e5b87852-9d8f-cce7-b828-5ecc06999b6b,2020-12-07,7,active
+1335,SKU-8448-B,234.3.214.214,"Kazan, Lenina st., 5",https://store.ru/cart,1a27c42c-ddc3-e8e0-4beb-23250c6e06a2,2024-11-17,31,active
+1336,SKU-8617-C,40.48.209.208,"Saint Petersburg, Mira st., 76",https://shop.com/cart,64b78d60-2a19-0b18-23ef-b2d49cdb0399,2021-11-05,0,active
+1337,SKU-9798-B,209.90.206.28,"Saint Petersburg, Tverskaya st., 60",https://example.org/product/123,4fdf5dec-fe44-c240-873e-448ea61632a6,2023-12-23,24,active
+1338,SKU-8611-C,254.94.43.3,"Novosibirsk, Lenina st., 56",https://market.net/cart,e9752064-0612-0c45-c8bf-2e166724bf93,2021-12-11,19,active
+1339,SKU-9466-C,191.51.1.38,"Kazan, Lenina st., 85",https://market.net/product/123,d37e907d-b345-89af-45f4-c6afe12978c8,2022-09-27,29,active
+1340,SKU-4521-C,112.248.150.111,"Yekaterinburg, Tverskaya st., 13",https://shop.com/category/electronics,79cd6d23-a028-8e82-70a5-4397a7aeb927,2024-04-27,14,active
+1341,SKU-4930-C,138.139.41.15,"Kazan, Baumana st., 53",https://market.net/category/electronics,55f2561c-96c0-ef1d-b1b0-0927052416a2,2021-01-14,33,active
+1342,SKU-8285-A,40.15.186.153,"Kazan, Tverskaya st., 46",https://market.net/checkout,a6f0033f-4e63-0ac4-c1cf-448e1d2d5786,2022-09-21,28,active
+1343,SKU-2150-B,188.86.129.76,"Kazan, Mira st., 99",https://shop.com/checkout,879e9fcf-ba20-1f4e-6821-af4b8c5fc16d,2021-03-22,47,active
+1344,SKU-3208-C,159.41.17.193,"Saint Petersburg, Mira st., 5",https://store.ru/user/profile,1d1ef9ae-ec54-2f9b-2abe-ec993ba00baa,2024-11-29,37,banned
+1345,SKU-8026-B,54.240.72.94,"Kazan, Lenina st., 21",https://example.org/user/profile,34b6ca73-e3cd-98b2-8276-0b99f5a9e944,2024-08-08,20,active
+1346,SKU-8005-B,195.95.52.75,"Saint Petersburg, Tverskaya st., 42",https://shop.com/product/123,da633b54-ceeb-ef62-973c-50409ac2fcab,2022-04-23,30,active
+1347,SKU-6127-A,198.44.117.80,"Yekaterinburg, Tverskaya st., 74",https://example.org/user/profile,002a4790-0adf-cef0-62fe-12deeb260ef6,2021-05-16,15,active
+1348,SKU-6277-A,102.209.162.22,"Kazan, Gagarina st., 51",https://store.ru/user/profile,ca730582-72ad-422f-10a3-a9c76445f369,2023-01-25,24,active
+1349,SKU-6581-C,177.209.165.14,"Kazan, Lenina st., 5",https://market.net/category/electronics,c916cf69-9f93-b787-3b4a-a1456f2b6036,2024-04-29,12,active
+1350,SKU-7905-A,130.137.7.195,"Novosibirsk, Baumana st., 48",https://shop.com/cart,9889d975-2cc4-2776-20b4-5be6d8e8d9c8,2023-03-26,31,active
+1351,SKU-8101-C,38.86.81.223,"Kazan, Tverskaya st., 5",https://market.net/product/123,ce8c19ac-2e51-3ac7-773d-9121db4cea43,2024-03-12,3,active
+1352,SKU-2340-A,240.194.90.163,"Yekaterinburg, Lenina st., 40",https://store.ru/category/electronics,6d1d144c-7693-227b-89f3-d9071056bfa9,2024-03-06,29,banned
+1353,SKU-6858-B,166.91.65.35,"Novosibirsk, Gagarina st., 14",https://shop.com/category/electronics,ddeb2225-fd21-0f4d-12c8-9cd2c6400c20,2020-10-10,39,banned
+1354,SKU-5483-A,116.151.184.52,"Kazan, Lenina st., 49",https://shop.com/cart,09c7d45f-057f-c301-8573-66dd1f33bad4,2022-05-27,22,active
+1355,SKU-3148-B,163.224.196.224,"Saint Petersburg, Gagarina st., 74",https://example.org/product/123,d5e67e42-0233-8471-ef09-644121a73dc7,2021-03-29,16,inactive
+1356,SKU-6695-A,203.126.253.176,"Saint Petersburg, Lenina st., 42",https://example.org/user/profile,06d31beb-823d-d7ba-c38d-970d99166ca7,2020-04-13,27,active
+1357,SKU-4080-B,117.185.239.88,"Novosibirsk, Lenina st., 40",https://shop.com/user/profile,88ec4153-dc9d-14fb-107d-0748f7baec66,2020-06-25,26,active
+1358,SKU-4061-A,4.39.186.109,"Novosibirsk, Baumana st., 55",https://example.org/category/electronics,15e0d771-2f21-4c2a-a0ad-9ea595b15deb,2024-10-29,3,inactive
+1359,SKU-3817-B,9.128.230.177,"Moscow, Gagarina st., 43",https://shop.com/user/profile,283e34be-2ecf-adea-0e29-8978bb36feba,2024-03-31,33,active
+1360,SKU-5991-B,239.174.16.15,"Moscow, Mira st., 36",https://shop.com/cart,a6d5b56d-e711-6836-2f56-6d9d64cea41e,2024-07-04,14,inactive
+1361,SKU-3241-A,202.235.136.53,"Novosibirsk, Baumana st., 69",https://store.ru/category/electronics,4e5630c3-d600-88b0-d0d2-9e06c2b831d9,2020-10-25,16,active
+1362,SKU-3821-C,215.59.199.23,"Saint Petersburg, Mira st., 95",https://store.ru/cart,645f751d-bf39-3aef-6ea7-bfe122cb331e,2021-05-04,35,inactive
+1363,SKU-8525-C,113.126.144.235,"Moscow, Mira st., 80",https://shop.com/product/123,116a2f53-213f-8e5b-1d76-8e394aeafaa9,2021-05-04,28,active
+1364,SKU-4528-C,160.168.210.125,"Moscow, Gagarina st., 11",https://example.org/checkout,1b8a3d13-cf2b-2ddf-e8c6-75cd5ef2bce5,2022-03-02,30,banned
+1365,SKU-6139-B,183.219.6.242,"Novosibirsk, Lenina st., 91",https://market.net/user/profile,e19aa1b9-8b3c-241d-fdac-e6f438677618,2024-02-27,23,inactive
+1366,SKU-6253-C,220.143.163.202,"Saint Petersburg, Tverskaya st., 93",https://shop.com/product/123,c24d3480-7f6d-0fd4-4fcb-438da34638a4,2022-10-01,45,active
+1367,SKU-4908-A,158.250.165.8,"Moscow, Mira st., 92",https://store.ru/product/123,ca8f3c23-5869-aef4-0dd3-2415a07efbf0,2022-12-13,10,inactive
+1368,SKU-3759-C,73.149.162.175,"Moscow, Baumana st., 16",https://shop.com/category/electronics,6a1b3c7e-8188-07be-6f7b-4bbce9f5657e,2024-04-01,40,active
+1369,SKU-5180-A,188.138.25.78,"Yekaterinburg, Lenina st., 48",https://shop.com/product/123,525f6fbf-7c03-04b4-5065-f8fa13e92a49,2021-11-26,12,active
+1370,SKU-8930-B,139.68.122.225,"Yekaterinburg, Baumana st., 84",https://example.org/product/123,0e37ad01-1bde-f7ee-4754-d805cd2a640c,2024-05-09,40,active
+1371,SKU-3878-A,68.224.248.35,"Yekaterinburg, Baumana st., 47",https://store.ru/checkout,cb80eaf1-698a-2dec-3edc-d3849f311eaf,2024-12-14,41,active
+1372,SKU-9514-C,231.189.99.178,"Saint Petersburg, Tverskaya st., 64",https://shop.com/category/electronics,e36bd5e3-e40f-9145-1e3d-ee47f0e157ae,2022-06-16,0,active
+1373,SKU-4500-B,31.117.94.101,"Kazan, Gagarina st., 21",https://store.ru/checkout,ef6f91e4-6105-0cf7-d215-d5dde38e69a8,2023-04-15,27,active
+1374,SKU-3286-C,208.82.147.183,"Kazan, Mira st., 96",https://example.org/category/electronics,6e114049-4e19-f771-7ec6-5916fdef3a80,2023-12-21,25,active
+1375,SKU-9270-A,201.115.199.173,"Yekaterinburg, Gagarina st., 13",https://example.org/cart,69e5d02e-7d53-ca72-42d0-4b6ed6774d11,2021-01-07,20,active
+1376,SKU-3184-C,45.178.92.250,"Kazan, Lenina st., 21",https://market.net/checkout,a91d5448-0fb5-428a-1e33-cd97837185e1,2021-11-01,11,active
+1377,SKU-2962-B,205.174.177.21,"Yekaterinburg, Baumana st., 3",https://store.ru/user/profile,59cb58a9-7257-7c9d-456f-14989dc34a67,2020-03-30,4,inactive
+1378,SKU-8276-A,209.56.192.150,"Moscow, Tverskaya st., 60",https://shop.com/cart,c78caa70-8ca8-36ab-b045-479a6d107894,2024-10-01,11,active
+1379,SKU-8614-B,251.6.168.116,"Moscow, Lenina st., 93",https://store.ru/category/electronics,fa6f8ecb-5db3-68fc-98ab-a4b861c53d2e,2022-04-20,5,active
+1380,SKU-2672-A,144.78.173.46,"Saint Petersburg, Baumana st., 33",https://store.ru/checkout,dfd0e6fe-24f4-cea8-7575-8640eee3ef50,2022-06-07,42,active
+1381,SKU-2547-B,37.11.24.5,"Moscow, Gagarina st., 22",https://example.org/category/electronics,8e396422-67e0-bff1-b980-9e8a052032d5,2020-05-13,17,inactive
+1382,SKU-9638-B,89.43.173.239,"Novosibirsk, Tverskaya st., 64",https://store.ru/category/electronics,9ea04610-8944-7be7-8fab-e79244400867,2024-06-03,23,inactive
+1383,SKU-2154-A,250.83.225.239,"Kazan, Gagarina st., 20",https://example.org/product/123,4f2f4a29-3f55-35ae-d405-748581d7813a,2021-10-24,32,inactive
+1384,SKU-2687-B,151.25.14.154,"Novosibirsk, Gagarina st., 78",https://example.org/category/electronics,811ba6e7-547e-62b5-be8c-d9e44b04ecc3,2021-02-07,30,active
+1385,SKU-4976-A,156.134.148.162,"Yekaterinburg, Mira st., 62",https://example.org/cart,11e58b99-98ac-585a-ed98-3facde737ddc,2022-02-08,6,active
+1386,SKU-6592-A,94.216.185.100,"Novosibirsk, Lenina st., 3",https://shop.com/checkout,b14a7d7a-10cd-b53e-949e-75580cd1ef2b,2022-02-24,48,inactive
+1387,SKU-3293-C,184.169.75.54,"Moscow, Mira st., 28",https://store.ru/user/profile,e95ab792-1214-77e1-d6b3-dfec04b8d409,2023-01-28,33,active
+1388,SKU-5807-B,75.200.39.136,"Moscow, Baumana st., 4",https://store.ru/category/electronics,39290474-7d41-0fda-51ba-11ed9f8ab00e,2022-06-26,31,active
+1389,SKU-6148-A,244.20.139.75,"Saint Petersburg, Lenina st., 1",https://store.ru/checkout,b117280c-dd3f-ceb7-f2f0-ae7095c6ab47,2021-05-26,1,active
+1390,SKU-6238-C,213.34.152.190,"Moscow, Gagarina st., 61",https://shop.com/checkout,11f97e1a-664b-d9d7-2f62-65c9fb083e99,2020-08-23,41,active
+1391,SKU-1380-B,34.102.36.133,"Kazan, Gagarina st., 72",https://store.ru/user/profile,c77aa389-25b1-cbf3-ef37-1165a23233a2,2020-09-06,29,active
+1392,SKU-3509-B,1.155.76.95,"Yekaterinburg, Lenina st., 89",https://store.ru/user/profile,283515aa-07c4-b1df-05b9-90e8f74971d5,2022-12-24,31,banned
+1393,SKU-9153-B,201.251.124.192,"Saint Petersburg, Baumana st., 61",https://example.org/cart,fe814071-7b88-35db-5bf1-50428001c0d1,2023-08-17,17,active
+1394,SKU-1585-B,99.165.99.39,"Novosibirsk, Baumana st., 50",https://shop.com/cart,ef6bea4c-36e5-5e67-8022-0d51c91b211b,2020-07-18,31,inactive
+1395,SKU-3787-C,221.94.91.97,"Saint Petersburg, Gagarina st., 85",https://store.ru/user/profile,33d253e5-ed2c-3e6f-e419-5d5dc5f31321,2022-10-22,1,active
+1396,SKU-2261-A,206.179.44.21,"Kazan, Mira st., 37",https://example.org/product/123,3c0de41e-bfbc-3ca0-4e85-2cae13f95520,2023-11-14,11,active
+1397,SKU-4494-C,158.35.41.202,"Novosibirsk, Baumana st., 89",https://store.ru/checkout,6925b7a4-1752-8ee7-8652-12a66c3175f1,2020-03-19,42,banned
+1398,SKU-5950-B,185.97.185.77,"Yekaterinburg, Baumana st., 89",https://example.org/user/profile,b461e8ad-d484-688b-c889-f399f42f5bb6,2023-12-21,27,inactive
+1399,SKU-7347-B,119.26.209.22,"Saint Petersburg, Lenina st., 84",https://store.ru/user/profile,b4051213-f195-947a-6971-cec2812dfe1c,2021-01-01,16,inactive
