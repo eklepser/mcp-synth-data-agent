@@ -15,6 +15,7 @@ from synth_service.profile import profile_csv, _parse_str_column
 from synth_service.generate import generate_table
 from synth_service.metrics import evaluate_reproduction
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Generate synthetic dataset from a CSV file.")
     p.add_argument("source", help="Path to the source CSV file")
@@ -25,12 +26,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", default="data/generated", help="Output directory (default: data/generated)")
     p.add_argument("--clip-to-range", action="store_true", help="Clip generated values to source min/max per numeric column")
     p.add_argument("--nv", "--no-visualize", dest="no_visualize", action="store_true", help="Do not open the visualization window")
+    # === НОВЫЕ АРГУМЕНТЫ ДЛЯ РЕЖИМА 'noisy' ===
+    p.add_argument(
+        "--mode",
+        choices=["clean", "noisy"],
+        default="clean",
+        help="Режим генерации: 'clean' (стандартный) или 'noisy' (с реалистичными ошибками)",
+    )
+    p.add_argument(
+        "--error-config",
+        type=str,
+        default=None,
+        help="Путь к JSON-файлу с конфигурацией ошибок (требуется для режима 'noisy')",
+    )
     return p
+
 
 def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, profile) -> float:
     ks_vals = [c.ks for c in report.columns if c.kind in ("numeric", "datetime") and c.ks is not None]
     tv_vals = [c.tv for c in report.columns if c.kind in ("categorical", "boolean") and c.tv is not None]
-    
     # Сравниваем mean и std для числовых столбцов
     stats_errors = []
     for c in profile.columns:
@@ -41,14 +55,13 @@ def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, pr
                 std_err = abs(real.std() - syn.std()) / (real.std() + 1e-9)
                 mean_err = abs(real.mean() - syn.mean()) / (abs(real.mean()) + 1e-9)
                 stats_errors.extend([std_err, mean_err])
-
     parts = []
     if ks_vals: parts.append(1.0 - float(np.mean(ks_vals)))
     if tv_vals: parts.append(1.0 - float(np.mean(tv_vals)))
-    if stats_errors: parts.append(1.0 - float(np.mean(stats_errors))) # Ошибка статистик
+    if stats_errors: parts.append(1.0 - float(np.mean(stats_errors)))  # Ошибка статистик
     if report.frobenius_corr is not None: parts.append(1.0 / (1.0 + float(report.frobenius_corr)))
-    
     return float(np.mean(parts)) if parts else 0.0
+
 
 def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
     kinds = {c.name: c.kind for c in profile.columns}
@@ -58,11 +71,9 @@ def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
         kind = kinds.get(col, "categorical")
         if kind == "numeric" and is_ints.get(col, False):
             kind = "integer"
-            
         s = df[col]
         n_notna = int(s.notna().sum())
         n_unique = int(s.dropna().nunique())
-        
         entry = {
             "name": col, "kind": kind, "n": n_notna,
             "mean": None, "std": None, "min": None, "max": None, "top": None, "top_share": None,
@@ -91,6 +102,7 @@ def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
         rows.append(entry)
     return rows
 
+
 def build_metrics_dict(source: Path, out_csv: Path, rows: int, target: float, achieved: float,
                        attempts: int, report, source_df: pd.DataFrame, synth_df: pd.DataFrame, profile) -> dict:
     return {
@@ -104,6 +116,7 @@ def build_metrics_dict(source: Path, out_csv: Path, rows: int, target: float, ac
         "text_checks": [asdict(chk) for chk in report.text_checks],
         "warnings": []
     }
+
 
 def main() -> int:
     args = build_parser().parse_args()
@@ -126,38 +139,76 @@ def main() -> int:
     out_json = out_dir / f"{stem}_metrics.json"
 
     best_synth, best_report, best_score, attempts_used = None, None, -1.0, 0
-
     for attempt in range(1, args.max_attempts + 1):
         attempts_used = attempt
         rs = args.random_state + (attempt - 1)
         synth = generate_table(df, prof, n=rows, random_state=rs)
-
         if args.clip_to_range:
             for c in prof.columns:
                 if c.kind == "numeric" and c.min is not None and c.max is not None and c.name in synth.columns:
                     synth[c.name] = synth[c.name].clip(lower=c.min, upper=c.max)
-
         report = evaluate_reproduction(df, synth, profile=prof)
         score = similarity_score(report, df, synth, prof)
-
         if score > best_score:
             best_score, best_synth, best_report = score, synth, report
-
         if score >= args.similarity:
             break
 
-    best_synth.to_csv(out_csv, index=False)
-    metrics = build_metrics_dict(source, out_csv, rows, args.similarity, best_score, attempts_used, best_report, df, best_synth, prof)
-    out_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+    # === СОХРАНЕНИЕ РЕЗУЛЬТАТА С УЧЁТОМ РЕЖИМА ===
+    if args.mode == "noisy":
+        if not args.error_config:
+            print("Error: режим 'noisy' требует указания --error-config", file=sys.stderr)
+            return 2
 
-    print(f"Saved CSV:     {out_csv}")
-    print(f"Saved metrics: {out_json}")
+        from synth_service.error_injector import load_error_model, inject_errors
+
+        error_config_path = Path(args.error_config)
+        if not error_config_path.exists():
+            print(f"Error: файл конфигурации не найден: {error_config_path}", file=sys.stderr)
+            return 2
+
+        print(f"🔧 Применяю модель ошибок из {error_config_path}...")
+        error_model = load_error_model(error_config_path)
+        noisy_synth, error_mask = inject_errors(best_synth, error_model, random_state=args.random_state)
+
+        # Сохраняем "грязные" данные
+        out_csv_noisy = out_dir / f"{stem}_generated_noisy.csv"
+        out_mask_csv = out_dir / f"{stem}_error_mask.csv"
+        noisy_synth.to_csv(out_csv_noisy, index=False)
+        error_mask.astype(int).to_csv(out_mask_csv, index=False)
+
+        print(f"✅ Сохранён зашумлённый CSV: {out_csv_noisy}")
+        print(f"✅ Сохранена карта ошибок: {out_mask_csv}")
+        print(f"   Всего искажено ячеек: {int(error_mask.to_numpy().sum())}")
+
+        # Также сохраняем метрики по зашумлённым данным
+        report_noisy = evaluate_reproduction(df, noisy_synth, profile=prof)
+        metrics = build_metrics_dict(
+            source, out_csv_noisy, rows, args.similarity, best_score,
+            attempts_used, report_noisy, df, noisy_synth, prof
+        )
+        metrics["mode"] = "noisy"
+        metrics["error_config"] = str(error_config_path)
+        metrics["corrupted_cells"] = int(error_mask.to_numpy().sum())
+        out_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Saved metrics: {out_json}")
+    else:
+        # Стандартный режим 'clean'
+        best_synth.to_csv(out_csv, index=False)
+        metrics = build_metrics_dict(
+            source, out_csv, rows, args.similarity, best_score,
+            attempts_used, best_report, df, best_synth, prof
+        )
+        metrics["mode"] = "clean"
+        out_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"Saved CSV: {out_csv}")
+        print(f"Saved metrics: {out_json}")
 
     if not args.no_visualize:
         vis_script = Path(__file__).parent / "visualize.py"
         subprocess.Popen([sys.executable, str(vis_script), str(out_json)])
-
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

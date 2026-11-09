@@ -1,0 +1,22 @@
+{
+  "age": {
+    "error_type": "missing",
+    "error_rate": 0.1,
+    "mechanism": "ecar"
+  },
+  "salary": {
+    "error_type": "outlier",
+    "error_rate": 0.05,
+    "mechanism": "ecar"
+  },
+  "city": {
+    "error_type": "typo",
+    "error_rate": 0.15,
+    "mechanism": "ecar"
+  },
+  "name": {
+    "error_type": "typo",
+    "error_rate": 0.2,
+    "mechanism": "ecar"
+  }
+}
