@@ -39,6 +39,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Путь к JSON-файлу с конфигурацией ошибок (требуется для режима 'noisy')",
     )
+    p.add_argument(
+        "--auto-errors",
+        action="store_true",
+        help="Автоматически подобрать типы ошибок на основе профиля данных (вместо --error-config)",
+    )
+    p.add_argument(
+        "--auto-error-rate",
+        type=float,
+        default=0.1,
+        help="Базовая вероятность ошибки для автогенерации (по умолчанию: 0.1)",
+    )
+    p.add_argument(
+        "--exclude-columns",
+        type=str,
+        default="",
+        help="Столбцы, которые не нужно искажать (через запятую, например: 'id,user_id')",
+    )
     return p
 
 
@@ -156,19 +173,47 @@ def main() -> int:
 
     # === СОХРАНЕНИЕ РЕЗУЛЬТАТА С УЧЁТОМ РЕЖИМА ===
     if args.mode == "noisy":
-        if not args.error_config:
-            print("Error: режим 'noisy' требует указания --error-config", file=sys.stderr)
+        from synth_service.error_injector import (
+            load_error_model,
+            inject_errors,
+            auto_error_model_from_profile,
+            save_error_model,
+        )
+
+        # === ВАРИАНТ A: АВТОГЕНЕРАЦИЯ МОДЕЛИ ===
+        if args.auto_errors:
+            print(f"🤖 Автоматически подбираю модель ошибок (rate={args.auto_error_rate})...")
+            exclude_cols = [c.strip() for c in args.exclude_columns.split(",") if c.strip()]
+            error_model = auto_error_model_from_profile(
+                profile=prof,
+                error_rate=args.auto_error_rate,
+                exclude_columns=exclude_cols,
+            )
+
+            # Сохраняем сгенерированную модель, чтобы её можно было переиспользовать
+            auto_config_path = out_dir / f"{stem}_auto_error_model.json"
+            save_error_model(error_model, auto_config_path)
+            print(f"💾 Авто-модель сохранена: {auto_config_path}")
+            print(f"   Настроено столбцов: {len(error_model.column_configs)}")
+
+            error_config_path = auto_config_path  # Для метрик
+
+        # === ВАРИАНТ B: РУЧНАЯ ЗАГРУЗКА ИЗ JSON ===
+        elif args.error_config:
+            error_config_path = Path(args.error_config)
+            if not error_config_path.exists():
+                print(f"Error: файл конфигурации не найден: {error_config_path}", file=sys.stderr)
+                return 2
+            print(f"🔧 Загружаю модель ошибок из {error_config_path}...")
+            error_model = load_error_model(error_config_path)
+
+        # === ОШИБКА: НЕ УКАЗАН НИ ОДИН СПОСОБ ===
+        else:
+            print("Error: режим 'noisy' требует указания --error-config ИЛИ --auto-errors", file=sys.stderr)
             return 2
 
-        from synth_service.error_injector import load_error_model, inject_errors
-
-        error_config_path = Path(args.error_config)
-        if not error_config_path.exists():
-            print(f"Error: файл конфигурации не найден: {error_config_path}", file=sys.stderr)
-            return 2
-
-        print(f"🔧 Применяю модель ошибок из {error_config_path}...")
-        error_model = load_error_model(error_config_path)
+        # === ПРИМЕНЯЕМ ОШИБКИ ===
+        print(f"🔧 Применяю модель ошибок...")
         noisy_synth, error_mask = inject_errors(best_synth, error_model, random_state=args.random_state)
 
         # Сохраняем "грязные" данные
@@ -177,9 +222,10 @@ def main() -> int:
         noisy_synth.to_csv(out_csv_noisy, index=False)
         error_mask.astype(int).to_csv(out_mask_csv, index=False)
 
+        corrupted_count = int(error_mask.to_numpy().sum())
         print(f"✅ Сохранён зашумлённый CSV: {out_csv_noisy}")
         print(f"✅ Сохранена карта ошибок: {out_mask_csv}")
-        print(f"   Всего искажено ячеек: {int(error_mask.to_numpy().sum())}")
+        print(f"   Всего искажено ячеек: {corrupted_count}")
 
         # Также сохраняем метрики по зашумлённым данным
         report_noisy = evaluate_reproduction(df, noisy_synth, profile=prof)
@@ -189,7 +235,7 @@ def main() -> int:
         )
         metrics["mode"] = "noisy"
         metrics["error_config"] = str(error_config_path)
-        metrics["corrupted_cells"] = int(error_mask.to_numpy().sum())
+        metrics["corrupted_cells"] = corrupted_count
         out_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Saved metrics: {out_json}")
     else:

@@ -1,12 +1,3 @@
-"""
-Модуль для внедрения реалистичных ошибок в синтетические данные.
-Архитектура вдохновлена библиотекой tab_err.
-
-Концепции:
-- ErrorType: КАК искажается значение (typo, outlier, missing, category_swap)
-- ErrorMechanism: ГДЕ появляются ошибки (ecar, ear, enar)
-- ErrorModel: Конфигурация, объединяющая типы и механизмы для каждого столбца
-"""
 from __future__ import annotations
 
 import json
@@ -98,7 +89,7 @@ def get_enar_mask(series: pd.Series, error_rate: float, condition: str,
         condition_mask = series.to_frame().eval(condition)
     except Exception as e:
         raise ValueError(f"Не удалось оценить условие '{condition}': {e}")
-    
+
     base_mask = rng.random(len(series)) < error_rate
     return base_mask & condition_mask.values
 
@@ -203,3 +194,99 @@ def inject_errors(
                 corrupted_df.loc[idx, col] = error_func(val, py_rng)
 
     return corrupted_df, error_mask
+
+
+# ============================================================================
+# 5. АВТОГЕНЕРАЦИЯ МОДЕЛИ ОШИБОК НА ОСНОВЕ ПРОФИЛЯ ДАННЫХ
+# ============================================================================
+
+from synth_service.profile import TableProfile
+
+
+def auto_error_model_from_profile(
+    profile: TableProfile,
+    error_rate: float = 0.1,
+    exclude_columns: list[str] | None = None,
+) -> ErrorModel:
+    """
+    Автоматически создает модель ошибок на основе анализа типов данных.
+
+    Args:
+        profile: результат работы profile_csv()
+        error_rate: базовая вероятность ошибки для каждого столбца (0.0 - 1.0)
+        exclude_columns: столбцы, которые НЕ нужно искажать (например, первичный ключ)
+
+    Returns:
+        ErrorModel с разумными настройками для каждого столбца
+    """
+    exclude_columns = exclude_columns or []
+    configs = {}
+
+    for col_profile in profile.columns:
+        col_name = col_profile.name
+
+        # Пропускаем столбцы из списка исключений
+        if col_name in exclude_columns:
+            continue
+
+        # Пропускаем столбцы, где слишком много пропусков (там уже "грязно")
+        if col_profile.missing_fraction > 0.5:
+            continue
+
+        # === ЛОГИКА ВЫБОРА ТИПА ОШИБКИ ПО ТИПУ ДАННЫХ ===
+        kind = col_profile.kind
+
+        if kind == "numeric":
+            # Для числовых данных — выбросы (самый частый тип ошибок в реале)
+            configs[col_name] = ColumnErrorConfig(
+                error_type="outlier",
+                error_rate=error_rate,
+                mechanism="ecar",
+            )
+
+        elif kind == "categorical":
+            # Для категорий — подмена на другую валидную категорию
+            if len(col_profile.categories) > 1:
+                configs[col_name] = ColumnErrorConfig(
+                    error_type="category_swap",
+                    error_rate=error_rate,
+                    mechanism="ecar",
+                )
+
+        elif kind == "boolean":
+            # Для булевых — инверсия значения
+            if len(col_profile.bool_values) > 1:
+                configs[col_name] = ColumnErrorConfig(
+                    error_type="category_swap",
+                    error_rate=error_rate,
+                    mechanism="ecar",
+                )
+
+        elif kind == "text":
+            # Для текста — опечатки
+            configs[col_name] = ColumnErrorConfig(
+                error_type="typo",
+                error_rate=error_rate,
+                mechanism="ecar",
+            )
+
+        elif kind == "datetime":
+            # Для дат — тоже опечатки (ломается формат)
+            configs[col_name] = ColumnErrorConfig(
+                error_type="typo",
+                error_rate=error_rate,
+                mechanism="ecar",
+            )
+
+        elif kind == "identifier":
+            # ID обычно не искажаем (они для связности), но можно добавить пропуски
+            # Оставляем пустым — пропускаем
+            pass
+
+    return ErrorModel(column_configs=configs)
+
+
+def save_error_model(model: ErrorModel, json_path: str | Path) -> None:
+    """Сохраняет модель ошибок в JSON-файл для последующего использования."""
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(model.to_dict(), f, indent=2, ensure_ascii=False)
