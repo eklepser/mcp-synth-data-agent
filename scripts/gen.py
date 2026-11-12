@@ -1,7 +1,8 @@
-"""Unified generation entry point."""
+# scripts/gen.py
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -13,8 +14,15 @@ import pandas as pd
 
 from synth_service.profile import profile_csv, _parse_str_column
 from synth_service.generate import generate_table
-from synth_service.metrics import evaluate_reproduction
+from synth_service.metrics import evaluate_reproduction, evaluate_distortion
 
+def get_file_hash(filepath: Path) -> str:
+    """Вычисляет SHA256 хэш файла для версионирования данных (ТЕЗИС: интеграция с DVC/версионированием)"""
+    sha256_hash = hashlib.sha256()
+    with open(filepath, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Generate synthetic dataset from a CSV file.")
@@ -26,43 +34,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", default="data/generated", help="Output directory (default: data/generated)")
     p.add_argument("--clip-to-range", action="store_true", help="Clip generated values to source min/max per numeric column")
     p.add_argument("--nv", "--no-visualize", dest="no_visualize", action="store_true", help="Do not open the visualization window")
-    # === НОВЫЕ АРГУМЕНТЫ ДЛЯ РЕЖИМА 'noisy' ===
-    p.add_argument(
-        "--mode",
-        choices=["clean", "noisy"],
-        default="clean",
-        help="Режим генерации: 'clean' (стандартный) или 'noisy' (с реалистичными ошибками)",
-    )
-    p.add_argument(
-        "--error-config",
-        type=str,
-        default=None,
-        help="Путь к JSON-файлу с конфигурацией ошибок (требуется для режима 'noisy')",
-    )
-    p.add_argument(
-        "--auto-errors",
-        action="store_true",
-        help="Автоматически подобрать типы ошибок на основе профиля данных (вместо --error-config)",
-    )
-    p.add_argument(
-        "--auto-error-rate",
-        type=float,
-        default=0.1,
-        help="Базовая вероятность ошибки для автогенерации (по умолчанию: 0.1)",
-    )
-    p.add_argument(
-        "--exclude-columns",
-        type=str,
-        default="",
-        help="Столбцы, которые не нужно искажать (через запятую, например: 'id,user_id')",
-    )
+    
+    p.add_argument("--mode", choices=["clean", "noisy"], default="clean", help="Режим генерации: 'clean' или 'noisy'")
+    p.add_argument("--error-config", type=str, default=None, help="Путь к JSON-файлу с конфигурацией ошибок")
+    p.add_argument("--auto-errors", action="store_true", help="Автоматически подобрать типы ошибок на основе профиля данных")
+    p.add_argument("--auto-error-rate", type=float, default=0.1, help="Базовая вероятность ошибки для автогенерации")
+    p.add_argument("--exclude-columns", type=str, default="", help="Столбцы, которые не нужно искажать (через запятую)")
     return p
-
 
 def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, profile) -> float:
     ks_vals = [c.ks for c in report.columns if c.kind in ("numeric", "datetime") and c.ks is not None]
     tv_vals = [c.tv for c in report.columns if c.kind in ("categorical", "boolean") and c.tv is not None]
-    # Сравниваем mean и std для числовых столбцов
     stats_errors = []
     for c in profile.columns:
         if c.kind == "numeric" and c.name in source_df.columns and c.name in synth_df.columns:
@@ -75,10 +57,9 @@ def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, pr
     parts = []
     if ks_vals: parts.append(1.0 - float(np.mean(ks_vals)))
     if tv_vals: parts.append(1.0 - float(np.mean(tv_vals)))
-    if stats_errors: parts.append(1.0 - float(np.mean(stats_errors)))  # Ошибка статистик
+    if stats_errors: parts.append(1.0 - float(np.mean(stats_errors)))
     if report.frobenius_corr is not None: parts.append(1.0 / (1.0 + float(report.frobenius_corr)))
     return float(np.mean(parts)) if parts else 0.0
-
 
 def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
     kinds = {c.name: c.kind for c in profile.columns}
@@ -119,10 +100,10 @@ def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
         rows.append(entry)
     return rows
 
-
 def build_metrics_dict(source: Path, out_csv: Path, rows: int, target: float, achieved: float,
-                       attempts: int, report, source_df: pd.DataFrame, synth_df: pd.DataFrame, profile) -> dict:
-    return {
+                       attempts: int, report, source_df: pd.DataFrame, synth_df: pd.DataFrame, profile,
+                       distortion_report=None, distortion_eval=None) -> dict:
+    metrics = {
         "source_file": str(source), "source_csv": str(source), "generated_csv": str(out_csv),
         "generated_rows": rows, "target_similarity": target, "achieved_similarity": achieved,
         "attempts_used": attempts, "source_stats": describe_columns(source_df, profile),
@@ -131,9 +112,18 @@ def build_metrics_dict(source: Path, out_csv: Path, rows: int, target: float, ac
         "frobenius_corr": report.frobenius_corr,
         "identifier_checks": [asdict(chk) for chk in report.identifier_checks],
         "text_checks": [asdict(chk) for chk in report.text_checks],
-        "warnings": []
+        "warnings": [],
+        # ТЕЗИС: интеграция с системами управления версиями данных
+        "source_hash": get_file_hash(source),
+        "generated_hash": get_file_hash(out_csv),
     }
-
+    
+    if distortion_report is not None:
+        metrics["distortion_report"] = distortion_report.to_dict()
+    if distortion_eval is not None:
+        metrics["distortion_evaluation"] = distortion_eval.to_dict()
+        
+    return metrics
 
 def main() -> int:
     args = build_parser().parse_args()
@@ -152,9 +142,7 @@ def main() -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = source.stem
-    out_csv = out_dir / f"{stem}_generated.csv"
-    out_json = out_dir / f"{stem}_metrics.json"
-
+    
     best_synth, best_report, best_score, attempts_used = None, None, -1.0, 0
     for attempt in range(1, args.max_attempts + 1):
         attempts_used = attempt
@@ -171,7 +159,6 @@ def main() -> int:
         if score >= args.similarity:
             break
 
-    # === СОХРАНЕНИЕ РЕЗУЛЬТАТА С УЧЁТОМ РЕЖИМА ===
     if args.mode == "noisy":
         from synth_service.error_injector import (
             load_error_model,
@@ -180,7 +167,6 @@ def main() -> int:
             save_error_model,
         )
 
-        # === ВАРИАНТ A: АВТОГЕНЕРАЦИЯ МОДЕЛИ ===
         if args.auto_errors:
             print(f"🤖 Автоматически подбираю модель ошибок (rate={args.auto_error_rate})...")
             exclude_cols = [c.strip() for c in args.exclude_columns.split(",") if c.strip()]
@@ -189,16 +175,10 @@ def main() -> int:
                 error_rate=args.auto_error_rate,
                 exclude_columns=exclude_cols,
             )
-
-            # Сохраняем сгенерированную модель, чтобы её можно было переиспользовать
             auto_config_path = out_dir / f"{stem}_auto_error_model.json"
             save_error_model(error_model, auto_config_path)
             print(f"💾 Авто-модель сохранена: {auto_config_path}")
-            print(f"   Настроено столбцов: {len(error_model.column_configs)}")
-
-            error_config_path = auto_config_path  # Для метрик
-
-        # === ВАРИАНТ B: РУЧНАЯ ЗАГРУЗКА ИЗ JSON ===
+            error_config_path = auto_config_path
         elif args.error_config:
             error_config_path = Path(args.error_config)
             if not error_config_path.exists():
@@ -206,17 +186,14 @@ def main() -> int:
                 return 2
             print(f"🔧 Загружаю модель ошибок из {error_config_path}...")
             error_model = load_error_model(error_config_path)
-
-        # === ОШИБКА: НЕ УКАЗАН НИ ОДИН СПОСОБ ===
         else:
             print("Error: режим 'noisy' требует указания --error-config ИЛИ --auto-errors", file=sys.stderr)
             return 2
 
-        # === ПРИМЕНЯЕМ ОШИБКИ ===
         print(f"🔧 Применяю модель ошибок...")
-        noisy_synth, error_mask = inject_errors(best_synth, error_model, random_state=args.random_state)
+        # ТЕЗИС: возвращая структурированный отчёт
+        noisy_synth, error_mask, distortion_report = inject_errors(best_synth, error_model, random_state=args.random_state)
 
-        # Сохраняем "грязные" данные
         out_csv_noisy = out_dir / f"{stem}_generated_noisy.csv"
         out_mask_csv = out_dir / f"{stem}_error_mask.csv"
         noisy_synth.to_csv(out_csv_noisy, index=False)
@@ -227,25 +204,32 @@ def main() -> int:
         print(f"✅ Сохранена карта ошибок: {out_mask_csv}")
         print(f"   Всего искажено ячеек: {corrupted_count}")
 
-        # Также сохраняем метрики по зашумлённым данным
-        report_noisy = evaluate_reproduction(df, noisy_synth, profile=prof)
+        # ТЕЗИС: измеряется соответствие фактического отклонения заданному: прирост дисперсии, сдвиг корреляционной матрицы
+        distortion_eval = evaluate_distortion(df, noisy_synth, distortion_report)
+        
         metrics = build_metrics_dict(
             source, out_csv_noisy, rows, args.similarity, best_score,
-            attempts_used, report_noisy, df, noisy_synth, prof
+            attempts_used, best_report, df, noisy_synth, prof,
+            distortion_report=distortion_report,
+            distortion_eval=distortion_eval
         )
         metrics["mode"] = "noisy"
         metrics["error_config"] = str(error_config_path)
+        metrics["error_config_hash"] = get_file_hash(error_config_path)
         metrics["corrupted_cells"] = corrupted_count
+        
+        out_json = out_dir / f"{stem}_metrics.json"
         out_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Saved metrics: {out_json}")
+        print(f"Saved metrics with distortion report: {out_json}")
     else:
-        # Стандартный режим 'clean'
+        out_csv = out_dir / f"{stem}_generated.csv"
         best_synth.to_csv(out_csv, index=False)
         metrics = build_metrics_dict(
             source, out_csv, rows, args.similarity, best_score,
             attempts_used, best_report, df, best_synth, prof
         )
         metrics["mode"] = "clean"
+        out_json = out_dir / f"{stem}_metrics.json"
         out_json.write_text(json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"Saved CSV: {out_csv}")
         print(f"Saved metrics: {out_json}")
@@ -254,7 +238,6 @@ def main() -> int:
         vis_script = Path(__file__).parent / "visualize.py"
         subprocess.Popen([sys.executable, str(vis_script), str(out_json)])
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
