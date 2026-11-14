@@ -1,0 +1,239 @@
+import json
+import sys
+import math
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import pandas as pd
+from mcp.server.fastmcp import FastMCP
+
+from synth_service.profile import profile_csv, _parse_str_column
+from synth_service.generate import generate_table
+from synth_service.error_injector import load_error_model, inject_errors, ErrorModel, ColumnErrorConfig
+from synth_service.metrics import evaluate_reproduction
+
+mcp = FastMCP("SynthDataService")
+
+
+def _clean_nan(obj):
+    if isinstance(obj, dict):
+        return {k: _clean_nan(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_nan(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+    return obj
+
+
+def _safe_json_dumps(data, **kwargs) -> str:
+    return json.dumps(_clean_nan(data), **kwargs, allow_nan=False)
+
+
+@mcp.tool()
+def list_available_files() -> str:
+    """Возвращает список доступных CSV-файлов в папке data/raw/ и конфигов в data/configs/."""
+    try:
+        raw_dir = Path("data/raw")
+        cfg_dir = Path("data/configs")
+        
+        raw_files = [f.name for f in raw_dir.glob("*.csv")] if raw_dir.exists() else []
+        cfg_files = [f.name for f in cfg_dir.glob("*.json")] if cfg_dir.exists() else []
+        
+        return _safe_json_dumps({
+            "source_files": raw_files,
+            "config_files": cfg_files
+        }, indent=2)
+    except Exception as e:
+        return _safe_json_dumps({"error": str(e)})
+
+
+@mcp.tool()
+def profile_data(csv_path: str) -> str:
+    """Профилирует CSV и возвращает JSON-строку с типами колонок."""
+    try:
+        prof = profile_csv(csv_path)
+        return _safe_json_dumps(prof.to_dict(), indent=2, ensure_ascii=False)
+    except Exception as e:
+        return _safe_json_dumps({"error": str(e)})
+
+
+def _get_combined_stats(df: pd.DataFrame, synth: pd.DataFrame, eval_report):
+    rows = []
+    if eval_report:
+        for c in eval_report.columns:
+            r_clean = df[c.name].dropna()
+            s_clean = synth[c.name].dropna()
+            
+            def get_row_stats(s, kind, prefix):
+                if kind in ("numeric", "integer"):
+                    return {
+                        "column": f"{prefix}{c.name}",
+                        "kind": kind,
+                        "n": len(s),
+                        "mean": float(s.mean()) if len(s) else None,
+                        "std": float(s.std(ddof=1)) if len(s) > 1 else None,
+                        "min": float(s.min()) if len(s) else None,
+                        "max": float(s.max()) if len(s) else None,
+                        "top": None,
+                        "top_share": None,
+                        "uniq": int(s.nunique()),
+                        "is_unique": int(s.nunique()) == len(s)
+                    }
+                else:
+                    val_counts = s.astype(str).value_counts(normalize=True)
+                    top_val = str(val_counts.index[0]) if len(val_counts) > 0 else None
+                    top_share = float(val_counts.iloc[0]) if len(val_counts) > 0 else None
+                    return {
+                        "column": f"{prefix}{c.name}",
+                        "kind": kind,
+                        "n": len(s),
+                        "mean": None,
+                        "std": None,
+                        "min": None,
+                        "max": None,
+                        "top": top_val,
+                        "top_share": top_share,
+                        "uniq": int(s.nunique()),
+                        "is_unique": int(s.nunique()) == len(s)
+                    }
+
+            rows.append(get_row_stats(r_clean, c.kind, ""))
+            rows.append(get_row_stats(s_clean, c.kind, ""))
+    return rows
+
+
+@mcp.tool()
+def generate_dataset(
+    source_path: str,
+    rows: int = 100,
+    target_similarity: float = 0.9,
+    max_attempts: int = 5,
+    random_state: int = 42
+) -> str:
+    """Генерирует чистую синтетику, стремясь к заданному сходству (similarity)."""
+    try:
+        if not str(source_path).startswith("data/"):
+            source_path = f"data/raw/{source_path}"
+
+        df_str = pd.read_csv(source_path, dtype=str)
+        df = df_str.copy()
+        for col in df_str.columns:
+            df[col] = _parse_str_column(df_str[col])
+
+        prof = profile_csv(source_path)
+        
+        best_synth = None
+        best_report = None
+        best_score = -1.0
+
+        for attempt in range(max_attempts):
+            rs = random_state + attempt
+            synth = generate_table(df, prof, n=rows, random_state=rs)
+            report = evaluate_reproduction(df, synth, profile=prof)
+            
+            ks_vals = [c.ks for c in report.columns if c.ks is not None]
+            tv_vals = [c.tv for c in report.columns if c.tv is not None]
+            parts = []
+            if ks_vals: parts.append(1.0 - sum(ks_vals)/len(ks_vals))
+            if tv_vals: parts.append(1.0 - sum(tv_vals)/len(tv_vals))
+            if report.frobenius_corr is not None: parts.append(1.0 / (1.0 + report.frobenius_corr))
+            score = sum(parts)/len(parts) if parts else 0.0
+            
+            if score > best_score:
+                best_score = score
+                best_synth = synth
+                best_report = report
+                
+            if score >= target_similarity:
+                break
+
+        out_path = f"data/generated/{Path(source_path).stem}_synth.csv"
+        best_synth.to_csv(out_path, index=False)
+
+        sample_df = best_synth.head(50)
+        if "id" in sample_df.columns:
+            try:
+                sample_df = sample_df.sort_values("id")
+            except Exception:
+                pass
+        sample_data = _clean_nan(sample_df.head(10).to_dict(orient="records"))
+
+        result = {
+            "source_file": str(source_path),
+            "generated_csv": str(out_path),
+            "generated_rows": len(best_synth),
+            "target_similarity": target_similarity,
+            "achieved_similarity": best_score,
+            "mode": "clean",
+            "column_stats": _get_combined_stats(df, best_synth, best_report),
+            "sample_data": sample_data
+        }
+        return _safe_json_dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return _safe_json_dumps({"error": f"Не удалось сгенерировать данные: {str(e)}"})
+
+
+@mcp.tool()
+def generate_custom_distortions(
+    source_path: str,
+    rows: int,
+    rules_json: str,
+    random_state: int = 42
+) -> str:
+    """Генерирует синтетику и применяет сложные искажения."""
+    try:
+        if not str(source_path).startswith("data/"):
+            source_path = f"data/raw/{source_path}"
+
+        rules = json.loads(rules_json)
+        
+        df_str = pd.read_csv(source_path, dtype=str)
+        df = df_str.copy()
+        for col in df_str.columns:
+            df[col] = _parse_str_column(df_str[col])
+
+        prof = profile_csv(source_path)
+        synth_clean = generate_table(df, prof, n=rows, random_state=random_state)
+
+        configs = {}
+        for col_name, rule in rules.items():
+            configs[col_name] = ColumnErrorConfig(
+                error_type=rule.get("error_type", "missing"),
+                error_rate=rule.get("rate", 0.1),
+                mechanism="ecar"
+            )
+
+        model = ErrorModel(column_configs=configs)
+        synth_noisy, mask, report = inject_errors(synth_clean, model, random_state=random_state)
+        
+        out_path = f"data/generated/{Path(source_path).stem}_noisy.csv"
+        synth_noisy.to_csv(out_path, index=False)
+
+        eval_report = evaluate_reproduction(df, synth_noisy, profile=prof)
+
+        sample_df = synth_noisy.head(50)
+        if "id" in sample_df.columns:
+            try:
+                sample_df = sample_df.sort_values("id")
+            except Exception:
+                pass
+        sample_data_clean = _clean_nan(sample_df.head(10).to_dict(orient="records"))
+
+        result = {
+            "source_file": str(source_path),
+            "generated_csv": str(out_path),
+            "generated_rows": len(synth_noisy),
+            "mode": "noisy",
+            "distortion_report": report.to_dict(),
+            "column_stats": _get_combined_stats(df, synth_noisy, eval_report),
+            "sample_data": sample_data_clean
+        }
+        return _safe_json_dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return _safe_json_dumps({"error": str(e)})
+
+
+if __name__ == "__main__":
+    mcp.run()

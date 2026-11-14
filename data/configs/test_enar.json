@@ -1,0 +1,11 @@
+{
+  "marginal": {
+    "total": {
+      "error_type": "outlier",
+      "error_rate": 0.5,
+      "mechanism": "enar",
+      "condition": "qty > 10"
+    }
+  },
+  "pairwise": []
+}

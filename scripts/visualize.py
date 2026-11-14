@@ -1,436 +1,243 @@
-"""Visualize generation metrics in a native PyQt6 window.
-
-Usage:
-    python scripts/visualize.py data/generated/users_complex_metrics.json
-"""
-from __future__ import annotations
-
 import json
 import sys
+import math
 from pathlib import Path
 
-import numpy as np
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import pandas as pd
-from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
-from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QPainter
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QTabWidget, QTableView, QVBoxLayout,
-    QWidget, QHeaderView, QLabel, QCheckBox, QHBoxLayout,
-    QStyledItemDelegate, QStyleOptionViewItem, QAbstractItemView, QFrame,
-)
+from mcp.server.fastmcp import FastMCP
+
+from synth_service.profile import profile_csv, _parse_str_column
+from synth_service.generate import generate_table
+from synth_service.error_injector import load_error_model, inject_errors, ErrorModel, ColumnErrorConfig
+from synth_service.metrics import evaluate_reproduction
+
+mcp = FastMCP("SynthDataService")
 
 
-def _clamp01(x: float) -> float:
-    return max(0.0, min(1.0, x))
-
-
-def _metric_color(value: float) -> QColor:
-    v = _clamp01(value)
-    r = int(80 + 175 * v)
-    g = int(200 - 140 * v)
-    b = int(80 + 20 * v)
-    return QColor(r, g, b)
-
-
-def _pvalue_color(value: float) -> QColor:
-    if value >= 0.05:
-        return QColor(150, 220, 150)
-    if value >= 0.01:
-        return QColor(245, 220, 140)
-    return QColor(235, 150, 150)
-
-
-_KIND_COLORS = {
-    "numeric": QColor(200, 220, 245),
-    "integer": QColor(180, 230, 245),
-    "categorical": QColor(245, 235, 190),
-    "boolean": QColor(215, 240, 200),
-    "identifier": QColor(225, 205, 245),
-    "datetime": QColor(200, 235, 235),
-    "text": QColor(245, 215, 220),
-}
-
-_UNIQ_HIGH_COLOR = QColor(180, 210, 245)
-_UNIQ_ONE_COLOR = QColor(255, 100, 100)
-_UNIQ_TWO_COLOR = QColor(150, 220, 150)
-
-_IS_UNIQUE_TRUE_COLOR = QColor(150, 220, 150)
-_IS_UNIQUE_FALSE_COLOR = QColor(245, 220, 140)
-
-
-class StatsTableModel(QAbstractTableModel):
-    def __init__(self, df: pd.DataFrame):
-        super().__init__()
-        self._df = df
-
-    def rowCount(self, parent=QModelIndex()) -> int:
-        return len(self._df)
-
-    def columnCount(self, parent=QModelIndex()) -> int:
-        return len(self._df.columns)
-
-    def _uniq_and_n(self, row: int) -> tuple[int | None, int | None]:
-        try:
-            uniq_val = self._df.iat[row, self._df.columns.get_loc("uniq")]
-            n_val = self._df.iat[row, self._df.columns.get_loc("n")]
-        except (KeyError, IndexError):
-            return None, None
-        try:
-            uniq = int(round(float(uniq_val)))
-        except (TypeError, ValueError):
-            uniq = None
-        try:
-            n = int(round(float(n_val)))
-        except (TypeError, ValueError):
-            n = None
-        return uniq, n
-
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if not index.isValid():
+def _clean_nan(obj):
+    if isinstance(obj, dict):
+        return {k: _clean_nan(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_nan(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
             return None
-        col_name = self._df.columns[index.column()]
-
-        if role == Qt.ItemDataRole.DisplayRole:
-            value = self._df.iat[index.row(), index.column()]
-            if value is None or (isinstance(value, float) and np.isnan(value)):
-                return "-"
-            if col_name == "uniq":
-                uniq, n = self._uniq_and_n(index.row())
-                if uniq is None:
-                    return "-"
-                if n is not None and n > 0:
-                    pct = uniq / n * 100.0
-                    return f"{uniq} ({pct:.1f}%)"
-                return str(uniq)
-            if isinstance(value, bool):
-                return "yes" if value else "no"
-            if isinstance(value, float):
-                return f"{value:.4f}"
-            return str(value)
-
-        if role == Qt.ItemDataRole.BackgroundRole:
-            value = self._df.iat[index.row(), index.column()]
-            if col_name == "kind" and isinstance(value, str):
-                color = _KIND_COLORS.get(value)
-                if color is not None:
-                    return QBrush(color)
-            if col_name == "uniq":
-                uniq, n = self._uniq_and_n(index.row())
-                if uniq is None:
-                    return None
-                if uniq == 1:
-                    return QBrush(_UNIQ_ONE_COLOR)
-                if uniq == 2:
-                    return QBrush(_UNIQ_TWO_COLOR)
-                if n is not None and uniq == n and n > 2:
-                    return QBrush(_UNIQ_HIGH_COLOR)
-            if col_name == "is unique":
-                # Надежная проверка: значение может быть bool, str или object
-                val_str = str(value).strip().lower()
-                if val_str in ("true", "yes", "1"):
-                    return QBrush(_IS_UNIQUE_TRUE_COLOR)
-                if val_str in ("false", "no", "0"):
-                    return QBrush(_IS_UNIQUE_FALSE_COLOR)
-        return None
-
-    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
-        if role == Qt.ItemDataRole.DisplayRole:
-            if orientation == Qt.Orientation.Horizontal:
-                return str(self._df.columns[section])
-            return str(section + 1)
-        if role == Qt.ItemDataRole.FontRole and orientation == Qt.Orientation.Horizontal:
-            f = QFont()
-            f.setBold(True)
-            return f
-        return None
+    return obj
 
 
-class GroupSeparatorDelegate(QStyledItemDelegate):
-    def __init__(self, parent, model: QAbstractTableModel, group_size: int):
-        super().__init__(parent)
-        self._model = model
-        self._group_size = max(1, group_size)
-
-    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index):
-        super().paint(painter, option, index)
-        if self._group_size <= 0:
-            return
-        row = index.row()
-        total = self._model.rowCount()
-        if (row + 1) % self._group_size == 0 and row + 1 < total:
-            painter.save()
-            pen = QPen(QColor(90, 90, 90))
-            pen.setWidth(2)
-            painter.setPen(pen)
-            rect = option.rect
-            painter.drawLine(rect.left(), rect.bottom(), rect.right(), rect.bottom())
-            painter.restore()
+def _safe_json_dumps(data, **kwargs) -> str:
+    return json.dumps(_clean_nan(data), **kwargs, allow_nan=False)
 
 
-class MetricsTableModel(QAbstractTableModel):
-    def __init__(self, df: pd.DataFrame):
-        super().__init__()
-        self._df = df
-
-    def rowCount(self, parent=QModelIndex()) -> int:
-        return len(self._df)
-
-    def columnCount(self, parent=QModelIndex()) -> int:
-        return len(self._df.columns)
-
-    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if not index.isValid():
-            return None
-        col_name = self._df.columns[index.column()]
-
-        if role == Qt.ItemDataRole.DisplayRole:
-            value = self._df.iat[index.row(), index.column()]
-            if value is None or (isinstance(value, float) and np.isnan(value)):
-                return "-"
-            if isinstance(value, float):
-                return f"{value:.4f}"
-            return str(value)
-
-        if role == Qt.ItemDataRole.BackgroundRole:
-            value = self._df.iat[index.row(), index.column()]
-            if isinstance(value, float) and not np.isnan(value):
-                if col_name in ("Kolmogorov-Smirnov", "Total Variation", "Jensen-Shannon"):
-                    return QBrush(_metric_color(value))
-                if col_name == "Kolmogorov-Smirnov p":
-                    return QBrush(_pvalue_color(value))
-            if col_name == "kind" and isinstance(value, str):
-                color = _KIND_COLORS.get(value)
-                if color is not None:
-                    return QBrush(color)
-        return None
-
-    def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
-        if role == Qt.ItemDataRole.DisplayRole:
-            if orientation == Qt.Orientation.Horizontal:
-                return str(self._df.columns[section])
-            return str(section + 1)
-        if role == Qt.ItemDataRole.FontRole and orientation == Qt.Orientation.Horizontal:
-            f = QFont()
-            f.setBold(True)
-            return f
-        return None
+@mcp.tool()
+def list_available_files() -> str:
+    """Возвращает список доступных CSV-файлов в папке data/raw/ и конфигов в data/configs/."""
+    try:
+        raw_dir = Path("data/raw")
+        cfg_dir = Path("data/configs")
+        
+        raw_files = [f.name for f in raw_dir.glob("*.csv")] if raw_dir.exists() else []
+        cfg_files = [f.name for f in cfg_dir.glob("*.json")] if cfg_dir.exists() else []
+        
+        return _safe_json_dumps({
+            "source_files": raw_files,
+            "config_files": cfg_files
+        }, indent=2)
+    except Exception as e:
+        return _safe_json_dumps({"error": str(e)})
 
 
-def _stats_to_dataframe(stats: list[dict]) -> pd.DataFrame:
-    if not stats:
-        return pd.DataFrame()
-    df = pd.DataFrame(stats)
-    df = df.rename(columns={
-        "name": "column", "kind": "kind", "n": "n",
-        "uniq": "uniq", "is_unique": "is unique",
-        "mean": "mean", "std": "std", "min": "min", "max": "max",
-        "top": "top", "top_share": "top share",
-    })
-    for col in ["uniq", "is unique"]:
-        if col not in df.columns:
-            df[col] = None
-    # Перемещаем uniq и is unique сразу после n
-    ordered = [
-        "column", "kind", "n", "uniq", "is unique", "mean", "std", "min", "max",
-        "top", "top share"
-    ]
-    return df[ordered]
+@mcp.tool()
+def profile_data(csv_path: str) -> str:
+    """Профилирует CSV и возвращает JSON-строку с типами колонок."""
+    try:
+        prof = profile_csv(csv_path)
+        return _safe_json_dumps(prof.to_dict(), indent=2, ensure_ascii=False)
+    except Exception as e:
+        return _safe_json_dumps({"error": str(e)})
 
 
-def _combined_stats_dataframe(header: dict) -> pd.DataFrame:
-    src = _stats_to_dataframe(header.get("source_stats", []))
-    gen = _stats_to_dataframe(header.get("generated_stats", []))
-    if src.empty and gen.empty:
-        return pd.DataFrame()
+def _get_combined_stats(df: pd.DataFrame, synth: pd.DataFrame, eval_report):
+    """
+    Возвращает плоский список, который агент легко превратит в таблицу.
+    Каждая колонка дублируется: сначала Source, затем Generated.
+    """
     rows = []
-    n = max(len(src), len(gen))
-    for i in range(n):
-        if i < len(src):
-            row = src.iloc[i].copy()
-            row["column"] = str(row["column"])
-            rows.append(row)
-        if i < len(gen):
-            row = gen.iloc[i].copy()
-            row["column"] = f"{row['column']} (generated)"
-            rows.append(row)
-    return pd.DataFrame(rows).reset_index(drop=True)
+    if eval_report:
+        for c in eval_report.columns:
+            r_clean = df[c.name].dropna()
+            s_clean = synth[c.name].dropna()
+            
+            def get_row_stats(s, kind, prefix):
+                if kind in ("numeric", "integer"):
+                    return {
+                        "column": f"{prefix}{c.name}",
+                        "kind": kind,
+                        "n": len(s),
+                        "mean": float(s.mean()) if len(s) else None,
+                        "std": float(s.std(ddof=1)) if len(s) > 1 else None,
+                        "min": float(s.min()) if len(s) else None,
+                        "max": float(s.max()) if len(s) else None,
+                        "top": None,
+                        "top_share": None,
+                        "uniq": int(s.nunique()),
+                        "is_unique": int(s.nunique()) == len(s)
+                    }
+                else:
+                    val_counts = s.astype(str).value_counts(normalize=True)
+                    top_val = str(val_counts.index[0]) if len(val_counts) > 0 else None
+                    top_share = float(val_counts.iloc[0]) if len(val_counts) > 0 else None
+                    return {
+                        "column": f"{prefix}{c.name}",
+                        "kind": kind,
+                        "n": len(s),
+                        "mean": None,
+                        "std": None,
+                        "min": None,
+                        "max": None,
+                        "top": top_val,
+                        "top_share": top_share,
+                        "uniq": int(s.nunique()),
+                        "is_unique": int(s.nunique()) == len(s)
+                    }
+
+            rows.append(get_row_stats(r_clean, c.kind, ""))
+            rows.append(get_row_stats(s_clean, c.kind, ""))
+
+    return rows
 
 
-def _make_table(model, delegate=None) -> QTableView:
-    table = QTableView()
-    table.setModel(model)
+@mcp.tool()
+def generate_dataset(
+    source_path: str,
+    rows: int = 100,
+    target_similarity: float = 0.9,
+    max_attempts: int = 5,
+    random_state: int = 42
+) -> str:
+    """Генерирует чистую синтетику, стремясь к заданному сходству (similarity)."""
+    try:
+        if not str(source_path).startswith("data/"):
+            source_path = f"data/raw/{source_path}"
 
-    header = table.horizontalHeader()
-    header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-    header.setStretchLastSection(False)
+        df_str = pd.read_csv(source_path, dtype=str)
+        df = df_str.copy()
+        for col in df_str.columns:
+            df[col] = _parse_str_column(df_str[col])
 
-    table.resizeColumnsToContents()
+        prof = profile_csv(source_path)
+        
+        best_synth = None
+        best_report = None
+        best_score = -1.0
 
-    table.verticalHeader().setVisible(False)
-    table.setAlternatingRowColors(False)
-    table.setShowGrid(True)
+        for attempt in range(max_attempts):
+            rs = random_state + attempt
+            synth = generate_table(df, prof, n=rows, random_state=rs)
+            report = evaluate_reproduction(df, synth, profile=prof)
+            
+            ks_vals = [c.ks for c in report.columns if c.ks is not None]
+            tv_vals = [c.tv for c in report.columns if c.tv is not None]
+            parts = []
+            if ks_vals: parts.append(1.0 - sum(ks_vals)/len(ks_vals))
+            if tv_vals: parts.append(1.0 - sum(tv_vals)/len(tv_vals))
+            if report.frobenius_corr is not None: parts.append(1.0 / (1.0 + report.frobenius_corr))
+            score = sum(parts)/len(parts) if parts else 0.0
+            
+            if score > best_score:
+                best_score = score
+                best_synth = synth
+                best_report = report
+                
+            if score >= target_similarity:
+                break
 
-    table.setFrameShape(QFrame.Shape.NoFrame)
-    table.setSizeAdjustPolicy(QAbstractItemView.SizeAdjustPolicy.AdjustToContents)
+        out_path = f"data/generated/{Path(source_path).stem}_synth.csv"
+        best_synth.to_csv(out_path, index=False)
 
-    table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-    table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        sample_df = best_synth.head(50)
+        if "id" in sample_df.columns:
+            try:
+                sample_df = sample_df.sort_values("id")
+            except Exception:
+                pass
+        sample_data = _clean_nan(sample_df.head(10).to_dict(orient="records"))
 
-    table.setStyleSheet(
-        "QTableView { border: none; gridline-color: #c8c8c8; }"
-        "QHeaderView::section { border: 1px solid #c8c8c8; padding: 2px; }"
-    )
-
-    if delegate is not None:
-        table.setItemDelegate(delegate)
-    return table
-
-
-def _make_info_label(header: dict) -> QLabel:
-    rows = header.get("generated_rows", "?")
-    target = header.get("target_similarity", 0)
-    achieved = header.get("achieved_similarity", 0)
-    attempts = header.get("attempts_used", "?")
-    source = header.get("source_file", "?")
-    html = (
-        f'Source: <b>{source}</b>&nbsp;&nbsp;&nbsp;'
-        f'Rows: <b>{rows}</b>&nbsp;&nbsp;&nbsp;'
-        f'Target similarity: <b>{target:.4f}</b>&nbsp;&nbsp;&nbsp;'
-        f'Achieved: <b>{achieved:.4f}</b>&nbsp;&nbsp;&nbsp;'
-        f'Attempts: <b>{attempts}</b>'
-    )
-    label = QLabel(html)
-    label.setTextFormat(Qt.TextFormat.RichText)
-    label.setContentsMargins(4, 4, 4, 4)
-    return label
-
-
-def make_stats_widget(header: dict) -> QWidget:
-    w = QWidget()
-    layout = QVBoxLayout(w)
-
-    layout.addWidget(_make_info_label(header))
-
-    controls = QHBoxLayout()
-    controls.setContentsMargins(4, 4, 4, 4)
-    combined_cb = QCheckBox("Combined View (Source + Generated)")
-    controls.addWidget(combined_cb)
-    controls.addStretch()
-    layout.addLayout(controls)
-
-    source_name = Path(header.get("source_file", "source")).name
-    generated_name = Path(header.get("generated_csv", "generated")).name
-
-    src_widget = QWidget()
-    src_layout = QVBoxLayout(src_widget)
-    src_layout.setContentsMargins(0, 0, 0, 0)
-    src_title = QLabel(f"Source dataset ({source_name})")
-    src_title.setContentsMargins(4, 4, 4, 4)
-    src_layout.addWidget(src_title)
-    src_df = _stats_to_dataframe(header.get("source_stats", []))
-    src_layout.addWidget(_make_table(StatsTableModel(src_df)), alignment=Qt.AlignmentFlag.AlignLeft)
-
-    gen_widget = QWidget()
-    gen_layout = QVBoxLayout(gen_widget)
-    gen_layout.setContentsMargins(0, 0, 0, 0)
-    gen_title = QLabel(f"Generated dataset ({generated_name})")
-    gen_title.setContentsMargins(4, 4, 4, 4)
-    gen_layout.addWidget(gen_title)
-    gen_df = _stats_to_dataframe(header.get("generated_stats", []))
-    gen_layout.addWidget(_make_table(StatsTableModel(gen_df)), alignment=Qt.AlignmentFlag.AlignLeft)
-
-    combined_widget = QWidget()
-    combined_layout = QVBoxLayout(combined_widget)
-    combined_layout.setContentsMargins(0, 0, 0, 0)
-    combined_title = QLabel("Combined View (Source + Generated)")
-    combined_title.setContentsMargins(4, 4, 4, 4)
-    combined_layout.addWidget(combined_title)
-    combined_df = _combined_stats_dataframe(header)
-    combined_model = StatsTableModel(combined_df)
-    combined_delegate = GroupSeparatorDelegate(combined_widget, combined_model, 2)
-    combined_table = _make_table(combined_model, combined_delegate)
-    combined_layout.addWidget(combined_table, alignment=Qt.AlignmentFlag.AlignLeft)
-
-    layout.addWidget(src_widget)
-    layout.addWidget(gen_widget)
-    layout.addWidget(combined_widget)
-
-    combined_widget.hide()
-    layout.addStretch()
-
-    def on_toggle(checked: bool) -> None:
-        if checked:
-            src_widget.hide()
-            gen_widget.hide()
-            combined_widget.show()
-        else:
-            combined_widget.hide()
-            src_widget.show()
-            gen_widget.show()
-
-    combined_cb.toggled.connect(on_toggle)
-    return w
+        result = {
+            "source_file": str(source_path),
+            "generated_csv": str(out_path),
+            "generated_rows": len(best_synth),
+            "achieved_similarity": best_score,
+            "mode": "clean",
+            "column_stats": _get_combined_stats(df, best_synth, best_report),
+            "sample_data": sample_data
+        }
+        return _safe_json_dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return _safe_json_dumps({"error": f"Не удалось сгенерировать данные: {str(e)}"})
 
 
-def make_comparison_widget(header: dict) -> QWidget:
-    w = QWidget()
-    layout = QVBoxLayout(w)
+@mcp.tool()
+def generate_custom_distortions(
+    source_path: str,
+    rows: int,
+    rules_json: str,
+    random_state: int = 42
+) -> str:
+    """Генерирует синтетику и применяет сложные искажения."""
+    try:
+        if not str(source_path).startswith("data/"):
+            source_path = f"data/raw/{source_path}"
 
-    frob = header.get("frobenius_corr", 0)
-    info = QLabel(f"Frobenius correlation distance: <b>{frob:.4f}</b>")
-    info.setTextFormat(Qt.TextFormat.RichText)
-    info.setContentsMargins(4, 4, 4, 4)
-    layout.addWidget(info)
+        rules = json.loads(rules_json)
+        
+        df_str = pd.read_csv(source_path, dtype=str)
+        df = df_str.copy()
+        for col in df_str.columns:
+            df[col] = _parse_str_column(df_str[col])
 
-    title = QLabel("Comparison metrics (Source vs Generated)")
-    title.setContentsMargins(4, 4, 4, 4)
-    layout.addWidget(title)
+        prof = profile_csv(source_path)
+        synth_clean = generate_table(df, prof, n=rows, random_state=random_state)
 
-    metrics_df = pd.DataFrame(header.get("columns", []))
-    if not metrics_df.empty:
-        metrics_df = metrics_df.rename(columns={
-            "name": "column", "kind": "kind",
-            "ks": "Kolmogorov-Smirnov", "ks_p_value": "Kolmogorov-Smirnov p",
-            "tv": "Total Variation", "js": "Jensen-Shannon",
-        })
-        metrics_df = metrics_df[[
-            "column", "kind", "Kolmogorov-Smirnov", "Kolmogorov-Smirnov p",
-            "Total Variation", "Jensen-Shannon",
-        ]]
+        configs = {}
+        for col_name, rule in rules.items():
+            configs[col_name] = ColumnErrorConfig(
+                error_type=rule.get("error_type", "missing"),
+                error_rate=rule.get("rate", 0.1),
+                mechanism="ecar"
+            )
 
-    layout.addWidget(_make_table(MetricsTableModel(metrics_df)), alignment=Qt.AlignmentFlag.AlignLeft)
-    layout.addStretch()
-    return w
+        model = ErrorModel(column_configs=configs)
+        synth_noisy, mask, report = inject_errors(synth_clean, model, random_state=random_state)
+        
+        out_path = f"data/generated/{Path(source_path).stem}_noisy.csv"
+        synth_noisy.to_csv(out_path, index=False)
 
+        eval_report = evaluate_reproduction(df, synth_noisy, profile=prof)
 
-class MetricsWindow(QMainWindow):
-    def __init__(self, metrics_path: Path):
-        super().__init__()
-        self.setWindowTitle(f"Metrics: {metrics_path.name}")
-        self.resize(1250, 800)
+        sample_df = synth_noisy.head(50)
+        if "id" in sample_df.columns:
+            try:
+                sample_df = sample_df.sort_values("id")
+            except Exception:
+                pass
+        sample_data_clean = _clean_nan(sample_df.head(10).to_dict(orient="records"))
 
-        header = json.loads(metrics_path.read_text(encoding="utf-8"))
-
-        tabs = QTabWidget()
-        tabs.addTab(make_stats_widget(header), "Data metrics")
-        tabs.addTab(make_comparison_widget(header), "Comparison")
-        self.setCentralWidget(tabs)
-
-
-def main() -> int:
-    if len(sys.argv) < 2:
-        print("Usage: python scripts/visualize.py <metrics.json>", file=sys.stderr)
-        return 2
-    path = Path(sys.argv[1])
-    if not path.exists():
-        print(f"File not found: {path}", file=sys.stderr)
-        return 2
-
-    app = QApplication(sys.argv)
-    win = MetricsWindow(path)
-    win.show()
-    return app.exec()
+        result = {
+            "source_file": str(source_path),
+            "generated_csv": str(out_path),
+            "generated_rows": len(synth_noisy),
+            "mode": "noisy",
+            "distortion_report": report.to_dict(),
+            "column_stats": _get_combined_stats(df, synth_noisy, eval_report),
+            "sample_data": sample_data_clean
+        }
+        return _safe_json_dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return _safe_json_dumps({"error": str(e)})
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    mcp.run()

@@ -1,0 +1,8 @@
+{
+  "marginal": {
+    "price": {"error_type": "outlier", "error_rate": 0.1, "mechanism": "ecar"},
+    "qty": {"error_type": "outlier", "error_rate": 0.1, "mechanism": "ecar"},
+    "total": {"error_type": "outlier", "error_rate": 0.1, "mechanism": "ecar"}
+  },
+  "pairwise": []
+}

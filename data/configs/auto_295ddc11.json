@@ -1,0 +1,11 @@
+{
+  "marginal": {
+    "qty": {
+      "error_type": "missing",
+      "error_rate": 0.05,
+      "mechanism": "ecar",
+      "condition": null
+    }
+  },
+  "pairwise": []
+}
