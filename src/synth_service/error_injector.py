@@ -170,36 +170,60 @@ class ColumnErrorConfig:
 
 @dataclass
 class PairwiseDistortionConfig:
-    """Конфигурация для парных искажений (ТЕЗИС: разрыв корреляции, инверсия)"""
+    """Конфигурация для парных искажений (ТЕЗИС: разрыв, ослабление, ложная связь, инверсия, сдвиг).
+
+    break_correlation   - ослабление/разрыв корреляции col1<->col2 до target_correlation
+                          (по умолчанию 0.0 = полный разрыв через перестановку col2).
+                          Если target_correlation != 0, исходный столбец смешивается с
+                          переставленным в пропорции, обеспечивающей целевую корреляцию.
+    invert_correlation  - инверсия знака зависимости.
+    shift_dependency    - изменение наклона линейной зависимости col2 = a*col1 + b + eps
+                          до target_slope (сохраняя маргинальное среднее/std col2).
+    """
     col1: str
     col2: str
-    action: Literal["break_correlation", "invert_correlation"]
-    target_correlation: float = 0.0  # Для break_correlation цель ~0.0
+    action: Literal["break_correlation", "invert_correlation", "shift_dependency"]
+    target_correlation: float = 0.0  # Для break_correlation: целевая корреляция в [-1, 1]
+    target_slope: float | None = None  # Для shift_dependency: целевой коэффициент при col1
 
     def __post_init__(self):
-        if self.action not in ("break_correlation", "invert_correlation"):
+        if self.action not in ("break_correlation", "invert_correlation", "shift_dependency"):
             raise ValueError(
                 f"Неизвестное парное действие: {self.action!r}. "
-                f"Доступны: break_correlation, invert_correlation"
+                f"Доступны: break_correlation, invert_correlation, shift_dependency"
             )
+        if self.action == "break_correlation" and not (-1.0 <= float(self.target_correlation) <= 1.0):
+            raise ValueError(
+                f"target_correlation должен быть в [-1, 1], получено: {self.target_correlation!r}"
+            )
+        if self.action == "shift_dependency" and self.target_slope is None:
+            raise ValueError("shift_dependency требует target_slope (числовой коэффициент наклона)")
 
-STRUCTURAL_ACTIONS = ("duplicate_rows", "drop_column", "rename_column", "change_type")
+STRUCTURAL_ACTIONS = ("duplicate_rows", "drop_column", "rename_column", "change_type", "distribution_drift")
 CHANGE_TYPE_TARGETS = ("float", "int", "string", "datetime")
 
 @dataclass
 class StructuralDistortionConfig:
     """Структурное искажение (ТЕЗИС: класс структурных - таблица в целом).
 
-    duplicate_rows - дублирование rate-доли строк;
-    drop_column    - удаление колонок из columns;
-    rename_column  - переименование columns[0] в new_name;
-    change_type    - смена типа columns[0] на new_type (float/int/string/datetime).
+    duplicate_rows      - дублирование rate-доли строк;
+    drop_column         - удаление колонок из columns;
+    rename_column       - переименование columns[0] в new_name;
+    change_type         - смена типа columns[0] на new_type (float/int/string/datetime);
+    distribution_drift  - дрейф распределения числовой колонки columns[0]:
+                          Y' = (Y + delta) * scale
+                          (delta - аддитивный сдвиг, по умолчанию 0;
+                           scale - мультипликативный масштаб, по умолчанию 1).
+                          Соответствует тезису "дрейф распределений" - сдвиг маргинала
+                          всей колонки при сохранении формы.
     """
-    action: Literal["duplicate_rows", "drop_column", "rename_column", "change_type"]
+    action: Literal["duplicate_rows", "drop_column", "rename_column", "change_type", "distribution_drift"]
     columns: list[str] = field(default_factory=list)
     new_name: str | None = None
     new_type: str | None = None
     rate: float = 0.05
+    delta: float = 0.0   # Для distribution_drift: аддитивный сдвиг
+    scale: float = 1.0   # Для distribution_drift: мультипликативный масштаб
 
     def __post_init__(self):
         if self.action not in STRUCTURAL_ACTIONS:
@@ -214,6 +238,13 @@ class StructuralDistortionConfig:
             raise ValueError("rename_column требует ровно одну колонку в columns и new_name")
         if self.action == "change_type" and (not self.columns or self.new_type not in CHANGE_TYPE_TARGETS):
             raise ValueError(f"change_type требует columns=[...] и new_type из {list(CHANGE_TYPE_TARGETS)}")
+        if self.action == "distribution_drift":
+            if len(self.columns) != 1:
+                raise ValueError("distribution_drift требует ровно одну колонку в columns")
+            if not (isinstance(self.delta, (int, float)) and not isinstance(self.delta, bool)):
+                raise ValueError(f"delta должен быть числом, получено: {self.delta!r}")
+            if not (isinstance(self.scale, (int, float)) and not isinstance(self.scale, bool)) or float(self.scale) <= 0:
+                raise ValueError(f"scale должен быть положительным числом, получено: {self.scale!r}")
 
 @dataclass
 class DistortionReport:
@@ -479,16 +510,68 @@ def inject_errors(
             orig_corr = None
 
         if p_cfg.action == "break_correlation":
-            if p_cfg.target_correlation != 0.0:
+            # ТЕЗИС: "ослабление или разрыв корреляционной связи".
+            # target_correlation == 0: чистая перестановка col2 -> корреляция ~0.
+            # target_correlation != 0: строим Y_new = target*r_z(x) + sqrt(1-target^2)*Y_shuffled_z
+            # (стандартизуем X и Y, смешиваем с нужным весом, денормализуем обратно к mean/std Y).
+            # Сохраняет маргинальное mean/std col2, обеспечивает целевую корреляцию с col1.
+            target = float(p_cfg.target_correlation)
+            x = corrupted_df[p_cfg.col1]
+            y = corrupted_df[p_cfg.col2]
+
+            if not (pd.api.types.is_numeric_dtype(x) and not pd.api.types.is_bool_dtype(x)
+                    and pd.api.types.is_numeric_dtype(y) and not pd.api.types.is_bool_dtype(y)):
+                skipped.append({
+                    "column": f"{p_cfg.col1},{p_cfg.col2}",
+                    "config": "break_correlation",
+                    "reason": "columns_not_numeric",
+                })
                 warnings.append(
-                    f"break_correlation({p_cfg.col1}, {p_cfg.col2}): target_correlation="
-                    f"{p_cfg.target_correlation} игнорируется - перемешивание даёт корреляцию около нуля"
+                    f"break_correlation({p_cfg.col1}, {p_cfg.col2}): обе колонки должны быть "
+                    f"числовыми (не bool) - пропущено"
                 )
-            # Перемешиваем col2, сохраняя маргинальное распределение, но разрывая связь
-            shuffled = corrupted_df[p_cfg.col2].sample(
-                frac=1.0, random_state=int(np_rng.integers(0, 2**31 - 1))
-            ).reset_index(drop=True)
-            corrupted_df[p_cfg.col2] = shuffled
+                continue
+
+            x_clean = x.astype("float64")
+            y_clean = y.astype("float64")
+            valid = x_clean.notna() & y_clean.notna()
+
+            if valid.sum() < 3:
+                skipped.append({
+                    "column": f"{p_cfg.col1},{p_cfg.col2}",
+                    "config": "break_correlation",
+                    "reason": "too_few_complete_rows",
+                })
+                warnings.append(
+                    f"break_correlation({p_cfg.col1}, {p_cfg.col2}): слишком мало полных строк - пропущено"
+                )
+                continue
+
+            mu_y = float(y_clean[valid].mean())
+            sd_y = float(y_clean[valid].std(ddof=1)) or 1.0
+            mu_x = float(x_clean[valid].mean())
+            sd_x = float(x_clean[valid].std(ddof=1)) or 1.0
+
+            # Стандартизованные значения (только на valid)
+            x_z = (x_clean[valid] - mu_x) / sd_x
+            y_z = (y_clean[valid] - mu_y) / sd_y
+
+            if abs(target) < 1e-9:
+                # Простой разрыв: переставляем Y
+                shuffled = y_z.to_numpy().copy()
+                np_rng.shuffle(shuffled)
+                y_new_z = shuffled
+            else:
+                # Y_new = target * X_z + sqrt(1 - target^2) * Y_shuffled_z
+                # Корреляция X_z и Y_new_z равна target при независимом Y_shuffled_z.
+                shuffled = y_z.to_numpy().copy()
+                np_rng.shuffle(shuffled)
+                coef = float(np.sqrt(max(0.0, 1.0 - target * target)))
+                y_new_z = target * x_z.to_numpy() + coef * shuffled
+
+            # Денормализация обратно к mean/std исходной col2
+            y_new_vals = mu_y + sd_y * y_new_z
+            corrupted_df.loc[valid[valid].index, p_cfg.col2] = y_new_vals.astype("float64")
 
             try:
                 new_corr = float(corrupted_df[[p_cfg.col1, p_cfg.col2]].corr().iloc[0, 1])
@@ -502,6 +585,94 @@ def inject_errors(
                 "original_correlation": orig_corr,
                 "new_correlation": new_corr,
                 "target_correlation": p_cfg.target_correlation
+            })
+        elif p_cfg.action == "shift_dependency":
+            # ТЕЗИС: "сдвиг зависимости" - изменить наклон линейной связи col2 = a*col1 + b + eps
+            # до target_slope, сохранив маргинальное среднее/std col2 (форма зависимости меняется,
+            # а маргинал col2 остаётся прежним по первым двум моментам).
+            x = corrupted_df[p_cfg.col1]
+            y = corrupted_df[p_cfg.col2]
+
+            if not (pd.api.types.is_numeric_dtype(x) and not pd.api.types.is_bool_dtype(x)
+                    and pd.api.types.is_numeric_dtype(y) and not pd.api.types.is_bool_dtype(y)):
+                skipped.append({
+                    "column": f"{p_cfg.col1},{p_cfg.col2}",
+                    "config": "shift_dependency",
+                    "reason": "columns_not_numeric",
+                })
+                warnings.append(
+                    f"shift_dependency({p_cfg.col1}, {p_cfg.col2}): обе колонки должны быть "
+                    f"числовыми (не bool) - пропущено"
+                )
+                continue
+
+            x_clean = x.astype("float64")
+            y_clean = y.astype("float64")
+            valid = x_clean.notna() & y_clean.notna()
+
+            if valid.sum() < 3:
+                skipped.append({
+                    "column": f"{p_cfg.col1},{p_cfg.col2}",
+                    "config": "shift_dependency",
+                    "reason": "too_few_complete_rows",
+                })
+                warnings.append(
+                    f"shift_dependency({p_cfg.col1}, {p_cfg.col2}): слишком мало полных строк - пропущено"
+                )
+                continue
+
+            xv = x_clean[valid].to_numpy()
+            yv = y_clean[valid].to_numpy()
+
+            # ТЕЗИС: "сдвиг зависимости" - изменить наклон линейной связи при сохранении
+            # маргинального mean/std col2. Делаем через стандартизованное смешивание:
+            # slope = corr * std_y / std_x  =>  corr_target = target_slope * std_x / std_y.
+            # Если |corr_target| > 1, цель недостижима при сохранении std_y.
+            mu_x, sd_x = float(xv.mean()), float(xv.std(ddof=1)) or 1.0
+            mu_y, sd_y = float(yv.mean()), float(yv.std(ddof=1)) or 1.0
+            r_target = float(p_cfg.target_slope) * sd_x / sd_y
+
+            if abs(r_target) > 1.0:
+                skipped.append({
+                    "column": f"{p_cfg.col1},{p_cfg.col2}",
+                    "config": "shift_dependency",
+                    "reason": f"target_slope_unreachable (implied |r|={abs(r_target):.3f} > 1)",
+                })
+                warnings.append(
+                    f"shift_dependency({p_cfg.col1}, {p_cfg.col2}): target_slope="
+                    f"{p_cfg.target_slope} требует |corr|={abs(r_target):.3f} > 1, "
+                    f"что недостижимо при сохранении std(col2) - пропущено"
+                )
+                continue
+
+            # Исходный наклон (для отчёта)
+            a_orig = float(np.cov(xv, yv, ddof=1)[0, 1] / (np.var(xv, ddof=1) or 1e-12))
+
+            z_x = (xv - mu_x) / sd_x
+            z_y = (yv - mu_y) / sd_y
+            z_y_shuffled = z_y.copy()
+            np_rng.shuffle(z_y_shuffled)
+            coef = float(np.sqrt(max(0.0, 1.0 - r_target * r_target)))
+            z_y_new = r_target * z_x + coef * z_y_shuffled
+
+            # Денормализация к исходному mean/std col2
+            y_new = mu_y + sd_y * z_y_new
+            corrupted_df.loc[valid[valid].index, p_cfg.col2] = y_new.astype("float64")
+
+            # Пересчитаем фактический наклон
+            try:
+                a_fact = float(np.cov(xv, y_new, ddof=1)[0, 1] / (np.var(xv, ddof=1) or 1e-12))
+            except Exception:
+                a_fact = None
+
+            applied_pairwise.append({
+                "action": "shift_dependency",
+                "col1": p_cfg.col1,
+                "col2": p_cfg.col2,
+                "original_slope": a_orig,
+                "new_slope": a_fact,
+                "target_slope": p_cfg.target_slope,
+                "original_correlation": orig_corr,
             })
         elif p_cfg.action == "invert_correlation":
             # Инверсия знака (для числовых)
@@ -607,6 +778,46 @@ def inject_errors(
             except Exception as e:
                 skipped.append({"column": c, "config": "change_type", "reason": f"cast_failed: {e}"})
                 warnings.append(f"change_type для '{c}' не выполнен: {e}")
+
+        elif s_cfg.action == "distribution_drift":
+            # ТЕЗИС: "дрейф распределений" - сдвиг маргинала колонки целиком.
+            # Y' = (Y + delta) * scale - форма распределения сохраняется,
+            # но его положение и/или масштаб дрейфуют.
+            c = s_cfg.columns[0]
+            if c not in corrupted_df.columns:
+                skipped.append({"column": c, "config": "distribution_drift", "reason": "column_not_found"})
+                warnings.append(f"distribution_drift: колонка '{c}' отсутствует - пропущено")
+                continue
+            series = corrupted_df[c]
+            if not (pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series)):
+                skipped.append({"column": c, "config": "distribution_drift", "reason": "column_not_numeric"})
+                warnings.append(
+                    f"distribution_drift: колонка '{c}' не числовая (dtype={series.dtype}) - пропущено"
+                )
+                continue
+            before_mean = float(series.dropna().mean()) if series.notna().any() else None
+            before_std = float(series.dropna().std(ddof=1)) if series.notna().sum() > 1 else None
+            # Приводим к float64 явно, чтобы избежать целочисленного переполнения
+            if pd.api.types.is_integer_dtype(series):
+                corrupted_df[c] = series.astype("float64")
+                series = corrupted_df[c]
+                warnings.append(f"distribution_drift: колонка '{c}' приведена к float64")
+            delta = float(s_cfg.delta)
+            scale = float(s_cfg.scale)
+            new_series = (series.astype("float64") + delta) * scale
+            corrupted_df[c] = new_series
+            after_mean = float(new_series.dropna().mean()) if new_series.notna().any() else None
+            after_std = float(new_series.dropna().std(ddof=1)) if new_series.notna().sum() > 1 else None
+            applied_structural.append({
+                "action": "distribution_drift",
+                "column": c,
+                "delta": delta,
+                "scale": scale,
+                "before_mean": before_mean,
+                "after_mean": after_mean,
+                "before_std": before_std,
+                "after_std": after_std,
+            })
 
     structural_changes = {"applied": applied_structural} if applied_structural else {}
 

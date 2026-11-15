@@ -11,7 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from synth_service.profile import profile_csv, _parse_str_column
 from synth_service.generate import generate_table
 from synth_service.error_injector import error_model_from_dict, inject_errors
-from synth_service.metrics import evaluate_reproduction
+from synth_service.metrics import evaluate_reproduction, evaluate_distortion
 
 mcp = FastMCP("SynthDataService")
 
@@ -201,14 +201,22 @@ def generate_custom_distortions(
                     запятой оставить (по умолчанию 1)
 
        "pairwise" - список объектов для парных искажений (корреляция двух колонок):
-         {"col1", "col2", "action": "break_correlation" | "invert_correlation",
-          "target_correlation": число (опционально)}
+         {"col1", "col2", "action": "break_correlation" | "invert_correlation" | "shift_dependency"}
+         Для "break_correlation" можно задать "target_correlation" в [-1, 1]:
+           - 0.0 (по умолчанию) - полный разрыв через перестановку col2;
+           - любое значение в (-1, 1) - ослабление/усиление до целевой корреляции,
+             сохраняя маргинальное mean/std col2.
+         Для "shift_dependency" обязательно "target_slope" - новый наклон линейной
+         зависимости col2 = a*col1 + b + eps (сохраняет mean/std col2, меняет форму связи).
 
        "structural" - список объектов для искажений таблицы в целом:
          {"action": "duplicate_rows", "rate": 0.1} - продублировать rate-долю строк
          {"action": "drop_column", "columns": ["name"]} - удалить колонки
          {"action": "rename_column", "columns": ["old"], "new_name": "new"}
          {"action": "change_type", "columns": ["age"], "new_type": "float|int|string|datetime"}
+         {"action": "distribution_drift", "columns": ["age"], "delta": 5.0, "scale": 1.2}
+           - дрейф распределения: Y' = (Y + delta) * scale
+           (delta - аддитивный сдвиг, scale - мультипликативный масштаб, scale > 0).
 
     2) ПЛОСКИЙ (совместимость): {колонка: {"error_type", "rate", "mechanism", "condition",
        "intensity"}} - то же, что "marginal" без обёртки, ключ "rate" равнозначен "error_rate".
@@ -250,11 +258,16 @@ def generate_custom_distortions(
         synth_clean = generate_table(df, prof, n=rows, random_state=random_state)
 
         synth_noisy, mask, report = inject_errors(synth_clean, model, random_state=random_state)
-        
+
         out_path = f"data/generated/{Path(source_path).stem}_noisy.csv"
         synth_noisy.to_csv(out_path, index=False)
 
         eval_report = evaluate_reproduction(df, synth_noisy, profile=prof)
+
+        # ТЕЗИС: "В режиме искажения измеряется соответствие фактического отклонения
+        # заданному: прирост дисперсии, сдвиг корреляционной матрицы, совпадение схемы
+        # с целевой." Без этого вызова у LLM-агента нет метрик режима искажения.
+        distortion_eval = evaluate_distortion(synth_clean, synth_noisy, report)
 
         sample_df = synth_noisy.head(50)
         if "id" in sample_df.columns:
@@ -270,6 +283,7 @@ def generate_custom_distortions(
             "generated_rows": len(synth_noisy),
             "mode": "noisy",
             "distortion_report": report.to_dict(),
+            "distortion_evaluation": distortion_eval.to_dict(),
             "applied_model": model.to_dict(),
             "column_stats": _get_combined_stats(df, synth_noisy, eval_report),
             "sample_data": sample_data_clean
