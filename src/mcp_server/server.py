@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from synth_service.profile import profile_csv, _parse_str_column
 from synth_service.generate import generate_table
-from synth_service.error_injector import load_error_model, inject_errors, ErrorModel, ColumnErrorConfig
+from synth_service.error_injector import error_model_from_dict, inject_errors
 from synth_service.metrics import evaluate_reproduction
 
 mcp = FastMCP("SynthDataService")
@@ -182,13 +182,65 @@ def generate_custom_distortions(
     rules_json: str,
     random_state: int = 42
 ) -> str:
-    """Генерирует синтетику и применяет сложные искажения."""
+    """Генерирует синтетику и применяет искажения заданного типа, интенсивности и адресации.
+
+    rules_json - JSON со спецификацией искажений. Допустимы два формата.
+
+    1) ПОЛНЫЙ (рекомендуется): {"marginal": {...}, "pairwise": [...], "structural": [...]}
+
+       "marginal" - объект {колонка: {параметры}}; параметры:
+         error_type (обязателен): typo | numeric_typo | outlier | missing | category_swap |
+                                  noise_additive | noise_multiplicative | precision_loss
+         error_rate: доля искажаемых ячеек, число в [0, 1]
+         mechanism: "ecar" (по умолчанию) - ячейки выбираются случайно;
+                    "enar" - только строки, удовлетворяющие condition
+         condition: pandas-выражение по ЛЮБЫМ колонкам таблицы для mechanism="enar",
+                    например "age > 40 && city == 'Moscow'"
+         intensity: сила искажения - для noise_additive/noise_multiplicative сигма шума
+                    как доля std колонки; для precision_loss - сколько знаков после
+                    запятой оставить (по умолчанию 1)
+
+       "pairwise" - список объектов для парных искажений (корреляция двух колонок):
+         {"col1", "col2", "action": "break_correlation" | "invert_correlation",
+          "target_correlation": число (опционально)}
+
+       "structural" - список объектов для искажений таблицы в целом:
+         {"action": "duplicate_rows", "rate": 0.1} - продублировать rate-долю строк
+         {"action": "drop_column", "columns": ["name"]} - удалить колонки
+         {"action": "rename_column", "columns": ["old"], "new_name": "new"}
+         {"action": "change_type", "columns": ["age"], "new_type": "float|int|string|datetime"}
+
+    2) ПЛОСКИЙ (совместимость): {колонка: {"error_type", "rate", "mechanism", "condition",
+       "intensity"}} - то же, что "marginal" без обёртки, ключ "rate" равнозначен "error_rate".
+
+    В ответе: distortion_report (план/факт по каждой модели, предупреждения, пропуски,
+    структурные изменения) и applied_model - итоговая применённая модель искажений.
+    """
     try:
         if not str(source_path).startswith("data/"):
             source_path = f"data/raw/{source_path}"
 
         rules = json.loads(rules_json)
-        
+        if not isinstance(rules, dict):
+            return _safe_json_dumps({"error": "rules_json должен быть JSON-объектом"})
+
+        # Совместимость со старым форматом тула: плоский {колонка: {..., "rate": ...}}
+        # нормализуем в {"marginal": ...} (ключ rate -> error_rate) и далее единый путь.
+        if "marginal" not in rules and "pairwise" not in rules and "structural" not in rules:
+            flat = {}
+            for col, rule in rules.items():
+                if not isinstance(rule, dict):
+                    return _safe_json_dumps(
+                        {"error": f"Правило для колонки '{col}' должно быть JSON-объектом"}
+                    )
+                flat[col] = {("error_rate" if k == "rate" else k): v for k, v in rule.items()}
+            rules = {"marginal": flat}
+
+        try:
+            model = error_model_from_dict(rules)
+        except (ValueError, TypeError) as e:
+            return _safe_json_dumps({"error": f"Некорректная модель искажений: {e}"})
+
         df_str = pd.read_csv(source_path, dtype=str)
         df = df_str.copy()
         for col in df_str.columns:
@@ -197,15 +249,6 @@ def generate_custom_distortions(
         prof = profile_csv(source_path)
         synth_clean = generate_table(df, prof, n=rows, random_state=random_state)
 
-        configs = {}
-        for col_name, rule in rules.items():
-            configs[col_name] = ColumnErrorConfig(
-                error_type=rule.get("error_type", "missing"),
-                error_rate=rule.get("rate", 0.1),
-                mechanism="ecar"
-            )
-
-        model = ErrorModel(column_configs=configs)
         synth_noisy, mask, report = inject_errors(synth_clean, model, random_state=random_state)
         
         out_path = f"data/generated/{Path(source_path).stem}_noisy.csv"
@@ -227,6 +270,7 @@ def generate_custom_distortions(
             "generated_rows": len(synth_noisy),
             "mode": "noisy",
             "distortion_report": report.to_dict(),
+            "applied_model": model.to_dict(),
             "column_stats": _get_combined_stats(df, synth_noisy, eval_report),
             "sample_data": sample_data_clean
         }

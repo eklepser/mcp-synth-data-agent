@@ -263,22 +263,24 @@ def _build_column_config(col: str, cfg_dict: dict) -> ColumnErrorConfig:
         raise ValueError(
             f"Конфигурация колонки '{col}' должна быть JSON-объектом, получено: {type(cfg_dict).__name__}"
         )
-    unknown = set(cfg_dict) - set(ColumnErrorConfig.__dataclass_fields__)
+    cfg = dict(cfg_dict)
+    # Совместимость со старым форматом MCP-тула: "rate" -> "error_rate"
+    if "rate" in cfg and "error_rate" not in cfg:
+        cfg["error_rate"] = cfg.pop("rate")
+    unknown = set(cfg) - set(ColumnErrorConfig.__dataclass_fields__)
     if unknown:
         raise ValueError(f"Конфигурация колонки '{col}' содержит неизвестные поля: {sorted(unknown)}")
     try:
-        return ColumnErrorConfig(**cfg_dict)
+        return ColumnErrorConfig(**cfg)
     except (TypeError, ValueError) as e:
         raise ValueError(f"Конфигурация колонки '{col}': {e}") from e
 
-def load_error_model(json_path: str) -> ErrorModel:
-    """Загружает модель ошибок из JSON.
+def error_model_from_dict(data: dict) -> ErrorModel:
+    """Строит ErrorModel из словаря конфигурации (тот же формат, что читает load_error_model).
 
     Поддерживаются формат {"marginal": {...}, "pairwise": [...], "structural": [...]}
     и плоский {"колонка": {...}} (раньше плоский формат молча давал 0 искажений).
     """
-    with open(json_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
     if not isinstance(data, dict):
         raise ValueError("Конфигурация ошибок должна быть JSON-объектом")
 
@@ -308,6 +310,12 @@ def load_error_model(json_path: str) -> ErrorModel:
             raise ValueError(f"Конфигурация structural[{i}]: {e}") from e
 
     return ErrorModel(column_configs=configs, pairwise_configs=pairwise, structural_configs=structural)
+
+def load_error_model(json_path: str) -> ErrorModel:
+    """Загружает модель ошибок из JSON-файла (см. error_model_from_dict)."""
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return error_model_from_dict(data)
 
 # ============================================================================
 # 4. ГЛАВНЫЙ ИНЖЕКТОР

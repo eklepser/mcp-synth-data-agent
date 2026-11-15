@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from synth_service.profile import profile_csv, _parse_str_column
 from synth_service.generate import generate_table
-from synth_service.error_injector import load_error_model, inject_errors, ErrorModel, ColumnErrorConfig
+from synth_service.error_injector import error_model_from_dict, inject_errors
 from synth_service.metrics import evaluate_reproduction
 
 mcp = FastMCP("SynthDataService")
@@ -186,13 +186,36 @@ def generate_custom_distortions(
     rules_json: str,
     random_state: int = 42
 ) -> str:
-    """Генерирует синтетику и применяет сложные искажения."""
+    """Генерирует синтетику и применяет искажения заданного типа, интенсивности и адресации.
+
+    Формат rules_json - см. generate_custom_distortions в mcp_server/server.py:
+    полный {"marginal", "pairwise", "structural"} или плоский {колонка: {"error_type", "rate", ...}}.
+    """
     try:
         if not str(source_path).startswith("data/"):
             source_path = f"data/raw/{source_path}"
 
         rules = json.loads(rules_json)
-        
+        if not isinstance(rules, dict):
+            return _safe_json_dumps({"error": "rules_json должен быть JSON-объектом"})
+
+        # Совместимость со старым форматом тула: плоский {колонка: {..., "rate": ...}}
+        # нормализуем в {"marginal": ...} (ключ rate -> error_rate) и далее единый путь.
+        if "marginal" not in rules and "pairwise" not in rules and "structural" not in rules:
+            flat = {}
+            for col, rule in rules.items():
+                if not isinstance(rule, dict):
+                    return _safe_json_dumps(
+                        {"error": f"Правило для колонки '{col}' должно быть JSON-объектом"}
+                    )
+                flat[col] = {("error_rate" if k == "rate" else k): v for k, v in rule.items()}
+            rules = {"marginal": flat}
+
+        try:
+            model = error_model_from_dict(rules)
+        except (ValueError, TypeError) as e:
+            return _safe_json_dumps({"error": f"Некорректная модель искажений: {e}"})
+
         df_str = pd.read_csv(source_path, dtype=str)
         df = df_str.copy()
         for col in df_str.columns:
@@ -201,15 +224,6 @@ def generate_custom_distortions(
         prof = profile_csv(source_path)
         synth_clean = generate_table(df, prof, n=rows, random_state=random_state)
 
-        configs = {}
-        for col_name, rule in rules.items():
-            configs[col_name] = ColumnErrorConfig(
-                error_type=rule.get("error_type", "missing"),
-                error_rate=rule.get("rate", 0.1),
-                mechanism="ecar"
-            )
-
-        model = ErrorModel(column_configs=configs)
         synth_noisy, mask, report = inject_errors(synth_clean, model, random_state=random_state)
         
         out_path = f"data/generated/{Path(source_path).stem}_noisy.csv"
@@ -231,6 +245,7 @@ def generate_custom_distortions(
             "generated_rows": len(synth_noisy),
             "mode": "noisy",
             "distortion_report": report.to_dict(),
+            "applied_model": model.to_dict(),
             "column_stats": _get_combined_stats(df, synth_noisy, eval_report),
             "sample_data": sample_data_clean
         }
