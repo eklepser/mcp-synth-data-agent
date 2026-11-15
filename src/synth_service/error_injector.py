@@ -12,6 +12,10 @@
 #   3. Каталог расширен до тезисов: шум (noise_additive / noise_multiplicative),
 #      потеря точности (precision_loss) и структурные искажения
 #      (duplicate_rows, drop_column, rename_column, change_type).
+#   4. ТЕЗИС "нарушение ограничений" - реализовано violate_constraints:
+#      unique - нарушение уникальности, range - значения вне заявленного
+#      диапазона, not_null - NaN в обязательной колонке; авто-модель теперь
+#      искажает и идентификаторы.
 from __future__ import annotations
 
 import json
@@ -208,8 +212,11 @@ class PairwiseDistortionConfig:
         if self.action == "shift_dependency" and self.target_slope is None:
             raise ValueError("shift_dependency требует target_slope (числовой коэффициент наклона)")
 
-STRUCTURAL_ACTIONS = ("duplicate_rows", "drop_column", "rename_column", "change_type", "distribution_drift")
+STRUCTURAL_ACTIONS = ("duplicate_rows", "drop_column", "rename_column", "change_type",
+                      "distribution_drift", "violate_constraints")
 CHANGE_TYPE_TARGETS = ("float", "int", "string", "datetime")
+# ТЕЗИС: "нарушение ограничений" - типы ограничений, поддерживаемые violate_constraints
+CONSTRAINT_TARGETS = ("unique", "range", "not_null")
 
 @dataclass
 class StructuralDistortionConfig:
@@ -225,14 +232,29 @@ class StructuralDistortionConfig:
                            scale - мультипликативный масштаб, по умолчанию 1).
                           Соответствует тезису "дрейф распределений" - сдвиг маргинала
                           всей колонки при сохранении формы.
+    violate_constraints - ТЕЗИС "нарушение ограничений": ломает заявленное ограничение
+                          колонки, не меняя её тип:
+                          constraint="unique"   - копирует значения из других строк,
+                                                  создавая дубликаты (анализ primary key);
+                          constraint="range"    - вставляет значения вне заявленного
+                                                  допустимого диапазона [min_value, max_value]
+                                                  (анализ CHECK); требуется ровно одна
+                                                  колонка и min_value и/или max_value;
+                          constraint="not_null" - вставляет NaN в заполненную колонку
+                                                  (анализ NOT NULL); int -> float64,
+                                                  bool -> object (см. metrics._expected_schema).
     """
-    action: Literal["duplicate_rows", "drop_column", "rename_column", "change_type", "distribution_drift"]
+    action: Literal["duplicate_rows", "drop_column", "rename_column", "change_type",
+                    "distribution_drift", "violate_constraints"]
     columns: list[str] = field(default_factory=list)
     new_name: str | None = None
     new_type: str | None = None
     rate: float = 0.05
     delta: float = 0.0   # Для distribution_drift: аддитивный сдвиг
     scale: float = 1.0   # Для distribution_drift: мультипликативный масштаб
+    constraint: str | None = None  # Для violate_constraints: unique | range | not_null
+    min_value: float | None = None # Для violate_constraints + range: нижняя граница диапазона
+    max_value: float | None = None # Для violate_constraints + range: верхняя граница диапазона
 
     def __post_init__(self):
         if self.action not in STRUCTURAL_ACTIONS:
@@ -254,6 +276,24 @@ class StructuralDistortionConfig:
                 raise ValueError(f"delta должен быть числом, получено: {self.delta!r}")
             if not (isinstance(self.scale, (int, float)) and not isinstance(self.scale, bool)) or float(self.scale) <= 0:
                 raise ValueError(f"scale должен быть положительным числом, получено: {self.scale!r}")
+        if self.action == "violate_constraints":
+            if self.constraint not in CONSTRAINT_TARGETS:
+                raise ValueError(
+                    f"constraint должен быть из {list(CONSTRAINT_TARGETS)}, получено: {self.constraint!r}"
+                )
+            if not self.columns:
+                raise ValueError("violate_constraints требует непустой список columns")
+            if self.constraint == "range":
+                if len(self.columns) != 1:
+                    raise ValueError("constraint='range' требует ровно одну колонку в columns")
+                for bound_name, bound in (("min_value", self.min_value), ("max_value", self.max_value)):
+                    if bound is not None and (isinstance(bound, bool) or not isinstance(bound, (int, float))):
+                        raise ValueError(f"{bound_name} должен быть числом, получено: {bound!r}")
+                if self.min_value is None and self.max_value is None:
+                    raise ValueError(
+                        "constraint='range' требует min_value и/или max_value "
+                        "(заявленный допустимый диапазон колонки)"
+                    )
 
 @dataclass
 class DistortionReport:
@@ -854,6 +894,171 @@ def inject_errors(
                 "after_std": after_std,
             })
 
+        elif s_cfg.action == "violate_constraints":
+            # ТЕЗИС: "нарушение ограничений" - структурный класс (таблица в целом).
+            # unique   - копирует значения из других строк, создавая дубликаты
+            #            (аналог ограничения уникальности / primary key);
+            # range    - вставляет значения вне заявленного диапазона
+            #            [min_value, max_value] (аналог CHECK);
+            # not_null - вставляет NaN в обязательную колонку (аналог NOT NULL).
+            for c in s_cfg.columns:
+                if c not in corrupted_df.columns:
+                    skipped.append({"column": c, "config": "violate_constraints", "reason": "column_not_found"})
+                    warnings.append(f"violate_constraints: колонка '{c}' отсутствует - пропущено")
+                    continue
+
+                series = corrupted_df[c]
+                n_rows = len(corrupted_df)
+                n_target = int(round(n_rows * float(s_cfg.rate)))
+                if n_target <= 0:
+                    warnings.append(
+                        f"violate_constraints ({c}, {s_cfg.constraint}): "
+                        f"rate={s_cfg.rate} не дал ни одной строки - пропущено"
+                    )
+                    continue
+
+                if s_cfg.constraint == "unique":
+                    non_null_idx = series.dropna().index
+                    if len(non_null_idx) < 2:
+                        skipped.append({"column": c, "config": "violate_constraints", "reason": "not_enough_values"})
+                        warnings.append(
+                            f"violate_constraints (unique): в колонке '{c}' меньше двух заполненных значений - пропущено"
+                        )
+                        continue
+                    n_target = min(n_target, len(non_null_idx))
+                    pos = np_rng.choice(len(non_null_idx), size=n_target, replace=False)
+                    target_idx = non_null_idx[pos]
+                    # Донор != цель: сдвиг на случайный ненулевой шаг по кольцу позиций
+                    donor_pos = (pos + np_rng.integers(1, len(non_null_idx), size=n_target)) % len(non_null_idx)
+                    donor_idx = non_null_idx[donor_pos]
+                    donor_vals = corrupted_df.loc[donor_idx, c].to_numpy()
+                    unique_before = int(series.dropna().nunique())
+                    changed = 0
+                    for idx, val in zip(target_idx, donor_vals):
+                        old = corrupted_df.at[idx, c]
+                        corrupted_df.at[idx, c] = val
+                        changed += int(_value_changed(old, val))
+                    error_mask.loc[target_idx, c] = True
+                    unique_after = int(corrupted_df[c].dropna().nunique())
+                    n_valid_after = int(corrupted_df[c].notna().sum())
+                    applied_structural.append({
+                        "action": "violate_constraints",
+                        "column": c,
+                        "constraint": "unique",
+                        "rate": s_cfg.rate,
+                        "planned": n_target,
+                        "corrupted": changed,
+                        "unique_before": unique_before,
+                        "unique_after": unique_after,
+                        "duplicates_added": max(0, (n_valid_after - unique_after) - (n_valid_after - unique_before)),
+                    })
+
+                elif s_cfg.constraint == "range":
+                    if not (pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series)):
+                        skipped.append({"column": c, "config": "violate_constraints", "reason": "column_not_numeric"})
+                        warnings.append(
+                            f"violate_constraints (range): колонка '{c}' не числовая (dtype={series.dtype}) - пропущено"
+                        )
+                        continue
+                    lo = None if s_cfg.min_value is None else float(s_cfg.min_value)
+                    hi = None if s_cfg.max_value is None else float(s_cfg.max_value)
+                    non_null_idx = series.dropna().index
+                    if len(non_null_idx) == 0:
+                        skipped.append({"column": c, "config": "violate_constraints", "reason": "no_values"})
+                        warnings.append(f"violate_constraints (range): колонка '{c}' пуста - пропущено")
+                        continue
+                    n_target = min(n_target, len(non_null_idx))
+                    # Относительный офсет, чтобы нарушения были заметны на любом масштабе данных
+                    if lo is not None and hi is not None:
+                        span = hi - lo
+                        base = span if span > 0 else max(abs(lo), abs(hi), 1.0)
+                    elif lo is not None:
+                        base = max(abs(lo), 1.0)
+                    else:
+                        base = max(abs(hi), 1.0)
+                    offset = 0.1 * base
+
+                    def _violation_value() -> float:
+                        # Только нижняя граница - нарушаем вниз; только верхняя - вверх;
+                        # обе - случайно в одну из сторон
+                        if lo is not None and hi is not None and np_rng.random() < 0.5:
+                            return lo - np_rng.uniform(0.2, 1.0) * offset
+                        if hi is not None:
+                            return hi + np_rng.uniform(0.2, 1.0) * offset
+                        return lo - np_rng.uniform(0.2, 1.0) * offset
+
+                    is_int = pd.api.types.is_integer_dtype(series)
+                    pos = np_rng.choice(len(non_null_idx), size=n_target, replace=False)
+                    target_idx = non_null_idx[pos]
+                    changed = 0
+                    for idx in target_idx:
+                        old = corrupted_df.at[idx, c]
+                        v = _violation_value()
+                        if is_int:
+                            # Пишем int, чтобы сохранить dtype колонки (схема не меняется)
+                            v = int(round(v))
+                            corrupted_df.at[idx, c] = v
+                        else:
+                            corrupted_df.at[idx, c] = float(v)
+                        changed += int(_value_changed(old, v))
+                    error_mask.loc[target_idx, c] = True
+                    after = corrupted_df[c]
+                    oob_mask = pd.Series(False, index=after.index)
+                    if lo is not None:
+                        oob_mask |= after < lo
+                    if hi is not None:
+                        oob_mask |= after > hi
+                    applied_structural.append({
+                        "action": "violate_constraints",
+                        "column": c,
+                        "constraint": "range",
+                        "rate": s_cfg.rate,
+                        "planned": n_target,
+                        "corrupted": changed,
+                        "min_value": lo,
+                        "max_value": hi,
+                        "out_of_bounds_after": int(oob_mask.sum()),
+                    })
+
+                elif s_cfg.constraint == "not_null":
+                    # NaN не хранится в int64, bool не хранит NaN - те же явные касты,
+                    # что и у маргинального 'missing' (см. блок выше)
+                    if pd.api.types.is_integer_dtype(series):
+                        corrupted_df[c] = series.astype("float64")
+                        series = corrupted_df[c]
+                        warnings.append(f"violate_constraints (not_null): колонка '{c}' приведена к float64")
+                    elif pd.api.types.is_bool_dtype(series):
+                        corrupted_df[c] = series.astype("object")
+                        series = corrupted_df[c]
+                        warnings.append(f"violate_constraints (not_null): колонка '{c}' приведена к object")
+                    non_null_idx = series.dropna().index
+                    if len(non_null_idx) == 0:
+                        skipped.append({"column": c, "config": "violate_constraints", "reason": "no_values"})
+                        warnings.append(f"violate_constraints (not_null): колонка '{c}' пуста - пропущено")
+                        continue
+                    n_target = min(n_target, len(non_null_idx))
+                    pos = np_rng.choice(len(non_null_idx), size=n_target, replace=False)
+                    target_idx = non_null_idx[pos]
+                    corrupted_df.loc[target_idx, c] = np.nan
+                    error_mask.loc[target_idx, c] = True
+                    applied_structural.append({
+                        "action": "violate_constraints",
+                        "column": c,
+                        "constraint": "not_null",
+                        "rate": s_cfg.rate,
+                        "planned": n_target,
+                        "corrupted": n_target,
+                        "new_nulls": n_target,
+                    })
+
+                else:
+                    skipped.append({
+                        "column": c,
+                        "config": "violate_constraints",
+                        "reason": f"unknown_constraint: {s_cfg.constraint}",
+                    })
+                    warnings.append(f"violate_constraints: неизвестное ограничение '{s_cfg.constraint}' - пропущено")
+
     structural_changes = {"applied": applied_structural} if applied_structural else {}
 
     if not applied_marginal and not applied_pairwise and not applied_structural:
@@ -888,8 +1093,17 @@ def auto_error_model_from_profile(
     error_rate: float = 0.1,
     exclude_columns: list[str] | None = None,
 ) -> ErrorModel:
+    """Автоматическая модель искажений на основе профиля данных.
+
+    Маргинальные: numeric - выбросы, categorical/boolean - смена категории,
+    text - опечатки, datetime - пропуски.
+    Структурные (ТЕЗИС: "нарушение ограничений"): identifier - нарушение
+    уникальности (unique), numeric - выход за наблюдаемый диапазон
+    (range с границами min/max из профиля).
+    """
     exclude_columns = exclude_columns or []
     configs = {}
+    structural_configs: list[StructuralDistortionConfig] = []
 
     for col_profile in profile.columns:
         col_name = col_profile.name
@@ -910,7 +1124,18 @@ def auto_error_model_from_profile(
             # строки. Пропуски контролируемы и сохраняют тип колонки.
             configs[col_name] = ColumnErrorConfig(error_type="missing", error_rate=error_rate, mechanism="ecar")
 
-    return ErrorModel(column_configs=configs)
+        # ТЕЗИС: "нарушение ограничений" - структурный класс искажений
+        if kind == "identifier" and col_profile.id_is_integer:
+            structural_configs.append(StructuralDistortionConfig(
+                action="violate_constraints", columns=[col_name], constraint="unique", rate=error_rate,
+            ))
+        elif kind == "numeric" and col_profile.min is not None and col_profile.max is not None:
+            structural_configs.append(StructuralDistortionConfig(
+                action="violate_constraints", columns=[col_name], constraint="range", rate=error_rate,
+                min_value=float(col_profile.min), max_value=float(col_profile.max),
+            ))
+
+    return ErrorModel(column_configs=configs, structural_configs=structural_configs)
 
 def save_error_model(model: ErrorModel, json_path: str) -> None:
     with open(json_path, "w", encoding="utf-8") as f:

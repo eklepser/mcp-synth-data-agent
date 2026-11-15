@@ -95,8 +95,16 @@ def list_available_files() -> str:
 
 @mcp.tool()
 def profile_data(csv_path: str) -> str:
-    """Профилирует CSV и возвращает JSON-строку с типами колонок."""
+    """Профилирует CSV и возвращает JSON-строку с типами колонок.
+
+    csv_path - имя файла из data/raw/ (например, из list_available_files)
+    или путь, начинающийся с "data/".
+    """
     try:
+        # Нормализация пути - та же, что в остальных тулах: агент передаёт
+        # имя файла из list_available_files без префикса data/raw/
+        if not str(csv_path).startswith("data/"):
+            csv_path = f"data/raw/{csv_path}"
         prof = profile_csv(csv_path)
         return _safe_json_dumps(prof.to_dict(), indent=2, ensure_ascii=False)
     except Exception as e:
@@ -265,6 +273,12 @@ def generate_custom_distortions(
          {"action": "distribution_drift", "columns": ["age"], "delta": 5.0, "scale": 1.2}
            - дрейф распределения: Y' = (Y + delta) * scale
            (delta - аддитивный сдвиг, scale - мультипликативный масштаб, scale > 0).
+         {"action": "violate_constraints", "columns": ["id"], "constraint": "unique", "rate": 0.1}
+           - нарушение ограничений (ТЕЗИС): "unique" - нарушает уникальность колонки
+             (создаёт дубликаты значений); "range" - вставляет значения вне заявленного
+             допустимого диапазона (обязательно min_value и/или max_value; ровно одна
+             колонка в columns); "not_null" - вставляет NaN в обязательную колонку
+             (int -> float64, bool -> object).
 
     2) ПЛОСКИЙ (совместимость): {колонка: {"error_type", "rate", "mechanism", "condition",
        "intensity"}} - то же, что "marginal" без обёртки, ключ "rate" равнозначен "error_rate".
@@ -341,7 +355,7 @@ def distort_existing_csv(csv_path: str, rules_json: str, random_state: int = 42)
     с rules_json тула generate_custom_distortions:
       {"marginal": {колонка: {"error_type", "error_rate", "mechanism", "condition", "intensity"}},
        "pairwise": [{"col1", "col2", "action", "target_correlation"?, "target_slope"?}],
-       "structural": [{"action", "columns"?, ...}]},
+       "structural": [{"action", "columns"?, "rate"?, "constraint"?, "min_value"?, "max_value"?}]},
     допустим и плоский формат {колонка: {"error_type", "rate", ...}}.
 
     В ответе: corrupted_csv - путь к испорченному файлу, error_mask_csv - карта

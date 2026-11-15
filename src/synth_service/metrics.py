@@ -274,6 +274,16 @@ def _expected_schema(
             col = s.get("column")
             if col in expected and expected[col] == "integer":
                 expected[col] = "float"
+        elif act == "violate_constraints":
+            # range пишет int в int-колонку (dtype сохраняется), unique копирует
+            # значения внутри колонки. Меняет схему только not_null: NaN не
+            # хранится в int64, bool не хранит NaN - инжектор кастует явно.
+            col = s.get("column")
+            if col in expected and s.get("constraint") == "not_null":
+                if expected[col] == "integer":
+                    expected[col] = "float"
+                elif expected[col] == "bool":
+                    expected[col] = "string"
     return expected
 
 def _schema_match(

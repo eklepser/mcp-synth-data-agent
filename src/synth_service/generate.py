@@ -5,55 +5,129 @@ import string
 import uuid
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata, ks_2samp
 
 from synth_service.copula_model import fit_copula
-from synth_service.profile import TableProfile
+from synth_service.profile import TableProfile, ColumnProfile, _NUMERIC_CANDIDATES, _dist_arg_names
+
+_DIST_BY_NAME = dict(_NUMERIC_CANDIDATES)
+
+
+def _ppf_from_profile(u: np.ndarray, col: ColumnProfile) -> np.ndarray | None:
+    """Обратная функция распределения (ppf) маргинала, выбранного на профилировании.
+
+    ТЕЗИС: копулы "раздельно описывают маргинальные распределения и структуру
+    зависимостей". Ранги копула-выборки равномерны на (0, 1), поэтому после
+    применения ppf выбранного по AIC распределения маргинал колонки совпадает
+    с подобранной статистической моделью, а ранговая (Spearman) зависимость
+    между колонками сохраняется без изменений.
+
+    Возвращает None, если fit непригоден (нет параметров, вырожденный scale,
+    нефинитный ppf) - вызывающий код откатывается к эмпирическим квантилям.
+    """
+    name = col.distribution
+    params = col.dist_params or {}
+    if not name or name not in _DIST_BY_NAME or not params:
+        return None
+    scale = params.get("scale")
+    if scale is None or not np.isfinite(scale) or float(scale) <= 0:
+        return None
+    dist = _DIST_BY_NAME[name]
+    args = []
+    for k in _dist_arg_names(dist):
+        v = params.get(k)
+        if v is None or not np.isfinite(v):
+            return None
+        args.append(float(v))
+    try:
+        out = dist.ppf(u, *args)
+    except Exception:
+        return None
+    if not np.all(np.isfinite(out)):
+        return None
+    return out
 
 
 def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_state: int = 42, clip_to_range: bool = True) -> pd.DataFrame:
+    """Генерация числовых колонок: гауссова копула + восстановление маргиналов.
+
+    ТЕЗИС: "копулы... позволяют раздельно описывать маргинальные распределения
+    и структуру зависимостей". Конвейер:
+      1) гауссова копула (fit_copula) задаёт зависимость между колонками;
+      2) копула-выборка переводится рангами в равномерные точки u на (0, 1):
+         ранги любой непрерывной выборки равномерны, поэтому ранговая
+         (Spearman) структура зависимости сохраняется точно;
+      3) маргинал каждой колонки восстанавливается обратной функцией
+         распределения (ppf):
+         - основной вариант - распределение, подобранное модулем
+           профилирования по AIC (статистическая модель из тезисов);
+         - резервный - эмпирические квантили исходной выборки;
+         вариант выбирается по критерию Колмогорова-Смирнова против
+         исходных данных, поэтому маргинал колонки максимально близок
+         к оригиналу.
+
+    Раньше здесь применялось аффинное min-макс масштабирование с подгонкой
+    std, которое разрушало форму скошенных распределений (у колонки balance
+    на users_complex.csv KS достигал 0.51 при асимметрии исходных данных 3.6).
+    """
     numeric_cols = [c.name for c in profile.columns if c.kind == "numeric"]
     if not numeric_cols:
         return pd.DataFrame()
 
     copula = fit_copula(df, numeric_cols, random_state=random_state)
     synth = copula.sample(n)
-    rng = np.random.default_rng(random_state)
 
     for c in profile.columns:
-        if c.kind != "numeric":
+        if c.kind != "numeric" or c.name not in synth.columns:
             continue
-            
+
+        raw = synth[c.name].to_numpy(dtype=float)
+        finite = np.isfinite(raw)
+        if not finite.any():
+            continue
+
+        # Ранги копула-выборки -> равномерные точки u на (0, 1)
+        ranks = rankdata(raw[finite], method="average")
+        u = (ranks - 0.5) / len(ranks)
+
+        v_param = _ppf_from_profile(u, c)
+        chosen = None
+        if c.name in df.columns:
+            real = df[c.name].dropna().astype(float).to_numpy()
+            if real.size >= 2:
+                v_emp = np.quantile(real, u)
+                if v_param is not None:
+                    # ТЕЗИС: оценка качества по критерию Колмогорова-Смирнова -
+                    # выбираем реконструкцию маргинала, статистически более
+                    # близкую к исходной выборке
+                    ks_param = float(ks_2samp(real, v_param).statistic)
+                    ks_emp = float(ks_2samp(real, v_emp).statistic)
+                    chosen = v_param if ks_param <= ks_emp else v_emp
+                else:
+                    chosen = v_emp
+        if chosen is None:
+            chosen = v_param
+        if chosen is None:
+            continue  # нет ни пригодного fit, ни исходных данных - оставляем копула-значения
+
+        vals = raw.copy()
+        vals[finite] = chosen
+        if not finite.all():
+            vals[~finite] = float(np.median(chosen))
+
         if c.is_integer:
-            rounded = np.round(synth[c.name].to_numpy())
-            if c.min is not None: 
+            rounded = np.round(vals)
+            if c.min is not None:
                 rounded = np.maximum(rounded, np.floor(c.min))
-            if c.max is not None: 
+            if c.max is not None:
                 rounded = np.minimum(rounded, np.ceil(c.max))
             synth[c.name] = rounded.astype("int64")
         else:
-            vals = synth[c.name].to_numpy()
-            
-            if c.min is not None and c.max is not None:
-                cur_min, cur_max = np.min(vals), np.max(vals)
-                if cur_max > cur_min:
-                    vals = c.min + (vals - cur_min) * (c.max - c.min) / (cur_max - cur_min)
-                else:
-                    vals = np.full_like(vals, c.min)
-                
+            # clip_to_range ограничивает float исходным диапазоном; по умолчанию
+            # выключен: подгонка хвостов подобранного распределения важнее,
+            # а компактность выборки и так следует из маргинала
+            if clip_to_range and c.min is not None and c.max is not None:
                 vals = np.clip(vals, c.min, c.max)
-
-            if c.std is not None and c.std > 0:
-                cur_std = np.std(vals)
-                if cur_std > 0:
-                    target_mean = c.mean if c.mean is not None else np.mean(vals)
-                    vals = target_mean + (vals - np.mean(vals)) * (c.std / cur_std)
-                    if c.min is not None and c.max is not None:
-                        vals = np.clip(vals, c.min, c.max)
-
-            span = (c.max - c.min) if (c.min is not None and c.max is not None) else 1.0
-            delta = max(1e-5, span * 0.0001)
-            vals = vals + rng.uniform(-delta, delta, size=len(vals))
-            
             synth[c.name] = vals
 
     return synth
