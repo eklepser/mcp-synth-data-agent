@@ -244,7 +244,12 @@ def _extract_text_pattern(strings: list[str]) -> tuple[str, dict[str, Any]]:
             continue
             
         if all(t.isalpha() for t in tokens):
-            unique_words = list(set(tokens)) 
+            # Порядок слов должен быть детерминирован: list(set) упорядочивается
+            # по хэшам строк (PYTHONHASHSEED), поэтому запечённый в pattern
+            # список слов различался между процессами - и генерация текстовых
+            # колонок с фиксированным random_state давала разные результаты.
+            # dict.fromkeys сохраняет порядок первого вхождения.
+            unique_words = list(dict.fromkeys(tokens))
             is_lower = all(t.islower() for t in tokens)
             is_upper = all(t.isupper() for t in tokens)
             pattern.append(("word", unique_words, is_lower, is_upper))

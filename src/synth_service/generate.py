@@ -110,6 +110,31 @@ def generate_datetime(profile: TableProfile, n: int, random_state: int = 42) -> 
     return pd.DataFrame(result)
 
 
+def _unique_values(n: int, producer, py_rng: random.Random) -> list[str]:
+    """Собирает n уникальных значений в ПОРЯДКЕ ГЕНЕРАЦИИ (детерминизм между процессами).
+
+    Раньше значения собирались в set, а list(set) упорядочивался по хэшам строк:
+    при фиксированном random_state разные процессы (PYTHONHASHSEED) получали
+    разный порядок строк, и файлы имели разные контрольные суммы. Здесь set
+    используется только для проверки вхождения (она не зависит от рандомизации
+    хэшей), порядок списка совпадает с порядком генерации. Если пространство
+    значений меньше n, после исчерпания попыток добираем повторами (раньше
+    это был вечный цикл; в ветке pattern так и было через padding).
+    """
+    seen: set[str] = set()
+    items: list[str] = []
+    for _ in range(max(n * 10, 1000)):
+        if len(items) >= n:
+            return items
+        value = producer()
+        if value not in seen:
+            seen.add(value)
+            items.append(value)
+    while 0 < len(items) < n:
+        items.append(py_rng.choice(items))
+    return items
+
+
 def generate_text(profile: TableProfile, n: int, random_state: int = 42) -> pd.DataFrame:
     py_rng = random.Random(random_state)
     result = {}
@@ -118,35 +143,32 @@ def generate_text(profile: TableProfile, n: int, random_state: int = 42) -> pd.D
             continue
 
         if c.text_pattern == "uuid":
-            generated = set()
-            while len(generated) < n:
-                generated.add(str(uuid.UUID(int=py_rng.getrandbits(128))))
-            result[c.name] = list(generated)
+            result[c.name] = _unique_values(
+                n,
+                lambda: str(uuid.UUID(int=py_rng.getrandbits(128))),
+                py_rng,
+            )
 
         elif c.text_pattern == "mac":
-            generated = set()
-            while len(generated) < n:
-                generated.add(":".join(f"{py_rng.randint(0, 255):02X}" for _ in range(6)))
-            result[c.name] = list(generated)
+            result[c.name] = _unique_values(
+                n,
+                lambda: ":".join(f"{py_rng.randint(0, 255):02X}" for _ in range(6)),
+                py_rng,
+            )
 
         elif c.text_pattern == "phone":
             length = c.text_options.get("length", 12)
-            generated = set()
-            while len(generated) < n:
-                prefix = "+7" 
-                rest_len = length - 2
-                rest = "".join(str(py_rng.randint(0, 9)) for _ in range(rest_len))
-                generated.add(f"{prefix}{rest}")
-            result[c.name] = list(generated)
+
+            def _phone() -> str:
+                rest = "".join(str(py_rng.randint(0, 9)) for _ in range(length - 2))
+                return f"+7{rest}"
+
+            result[c.name] = _unique_values(n, _phone, py_rng)
 
         elif c.text_pattern == "pattern":
             pattern = c.text_options["pattern"]
-            generated = set()
-            max_attempts = n * 10 
-            attempts = 0
-            
-            while len(generated) < n and attempts < max_attempts:
-                attempts += 1
+
+            def _from_pattern() -> str:
                 s_parts = []
                 for item in pattern:
                     item_type = item[0]
@@ -166,17 +188,16 @@ def generate_text(profile: TableProfile, n: int, random_state: int = 42) -> pd.D
                         min_len, max_len = item[1], item[2]
                         length = py_rng.randint(min_len, max_len)
                         s_parts.append("".join(py_rng.choice(string.ascii_letters) for _ in range(length)))
-                generated.add("".join(s_parts))
-            
-            result[c.name] = list(generated)
-            while len(result[c.name]) < n:
-                result[c.name].append(py_rng.choice(result[c.name]))
-                
+                return "".join(s_parts)
+
+            result[c.name] = _unique_values(n, _from_pattern, py_rng)
+
         else:
-            generated = set()
-            while len(generated) < n:
-                generated.add("".join(py_rng.choices(string.ascii_lowercase, k=8)))
-            result[c.name] = list(generated)
+            result[c.name] = _unique_values(
+                n,
+                lambda: "".join(py_rng.choices(string.ascii_lowercase, k=8)),
+                py_rng,
+            )
 
     return pd.DataFrame(result)
 

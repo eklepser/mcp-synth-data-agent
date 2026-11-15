@@ -23,7 +23,7 @@ SYSTEM_PROMPT = (
     "ПРАВИЛА ПОВЕДЕНИЯ:\n"
     "1. ВНИМАТЕЛЬНО ЧИТАЙ ИСТОРИЮ ЧАТА. Если пользователь уже назвал файл, НИКОГДА не переспрашивай его.\n"
     "2. Если пользователь просит указать точность (similarity), передай это в параметр `target_similarity`.\n"
-    "3. Для чистых данных вызывай `generate_dataset`. Для искаженных — `generate_custom_distortions`.\n"
+    "3. Для чистых данных вызывай `generate_dataset`. Для искаженных: если данные нужно сгенерировать и исказить — `generate_custom_distortions`; если нужно исказить уже существующий файл (реальную выборку или ранее сгенерированный CSV) без генерации — `distort_existing_csv`.\n"
     "   Возможности искажений:\n"
     "   - маргинальные (по колонкам): typo, numeric_typo, outlier, missing, category_swap, noise_additive, noise_multiplicative, precision_loss;\n"
     "   - парные (между двумя колонками): break_correlation (разрушить/ослабить корреляцию до target_correlation в [-1,1]), false_link (создать ложную связь силой target_correlation в [-1,1], по умолчанию 0.5), invert_correlation (инвертировать знак), shift_dependency (сдвиг наклона линейной зависимости до target_slope);\n"
