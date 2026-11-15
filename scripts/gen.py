@@ -47,7 +47,11 @@ def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, pr
     tv_vals = [c.tv for c in report.columns if c.kind in ("categorical", "boolean") and c.tv is not None]
     stats_errors = []
     for c in profile.columns:
-        if c.kind == "numeric" and c.name in source_df.columns and c.name in synth_df.columns:
+        # Структурные искажения (change_type) могут сменить dtype - считаем
+        # числовую статистику только по колонкам, оставшимся числовыми
+        if c.kind == "numeric" and c.name in source_df.columns and c.name in synth_df.columns \
+                and pd.api.types.is_numeric_dtype(source_df[c.name]) \
+                and pd.api.types.is_numeric_dtype(synth_df[c.name]):
             real = source_df[c.name].dropna()
             syn = synth_df[c.name].dropna()
             if len(real) > 1 and len(syn) > 1:
@@ -77,12 +81,12 @@ def describe_columns(df: pd.DataFrame, profile) -> list[dict]:
             "mean": None, "std": None, "min": None, "max": None, "top": None, "top_share": None,
             "uniq": n_unique, "is_unique": n_unique == n_notna
         }
-        if kind in ("numeric", "integer"):
+        if kind in ("numeric", "integer") and pd.api.types.is_numeric_dtype(s):
             clean = s.dropna()
             if len(clean):
                 entry.update(mean=float(clean.mean()), std=float(clean.std(ddof=1)) if len(clean) > 1 else 0.0,
                              min=float(clean.min()), max=float(clean.max()))
-        elif kind in ("categorical", "boolean"):
+        elif kind in ("categorical", "boolean", "numeric", "integer"):
             clean = s.dropna().astype(str)
             if len(clean):
                 vc = clean.value_counts(normalize=True)
@@ -150,7 +154,8 @@ def main() -> int:
         synth = generate_table(df, prof, n=rows, random_state=rs)
         if args.clip_to_range:
             for c in prof.columns:
-                if c.kind == "numeric" and c.min is not None and c.max is not None and c.name in synth.columns:
+                if c.kind == "numeric" and c.min is not None and c.max is not None \
+                        and c.name in synth.columns and pd.api.types.is_numeric_dtype(synth[c.name]):
                     synth[c.name] = synth[c.name].clip(lower=c.min, upper=c.max)
         report = evaluate_reproduction(df, synth, profile=prof)
         score = similarity_score(report, df, synth, prof)
