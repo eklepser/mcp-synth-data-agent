@@ -1,0 +1,14 @@
+{
+  "marginal": {
+    "age": {"error_type": "noise_additive", "error_rate": 0.3, "intensity": 0.15},
+    "orders_count": {"error_type": "noise_multiplicative", "error_rate": 0.2, "intensity": 0.25},
+    "balance": {"error_type": "precision_loss", "error_rate": 0.5, "intensity": 1},
+    "phone": {"error_type": "typo", "error_rate": 0.2},
+    "city": {"error_type": "category_swap", "error_rate": 0.1}
+  },
+  "pairwise": [],
+  "structural": [
+    {"action": "duplicate_rows", "rate": 0.05},
+    {"action": "change_type", "columns": ["age"], "new_type": "string"}
+  ]
+}

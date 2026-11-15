@@ -1,0 +1,7 @@
+{
+  "marginal": {
+    "balance": {"error_type": "outlier", "error_rate": 0.5, "mechanism": "enar", "condition": "age > 40"}
+  },
+  "pairwise": [],
+  "structural": []
+}
