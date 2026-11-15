@@ -26,7 +26,7 @@ SYSTEM_PROMPT = (
     "3. Для чистых данных вызывай `generate_dataset`. Для искаженных — `generate_custom_distortions`.\n"
     "   Возможности искажений:\n"
     "   - маргинальные (по колонкам): typo, numeric_typo, outlier, missing, category_swap, noise_additive, noise_multiplicative, precision_loss;\n"
-    "   - парные (между двумя колонками): break_correlation (разрушить/ослабить корреляцию до target_correlation в [-1,1]), invert_correlation (инвертировать знак), shift_dependency (сдвиг наклона линейной зависимости до target_slope);\n"
+    "   - парные (между двумя колонками): break_correlation (разрушить/ослабить корреляцию до target_correlation в [-1,1]), false_link (создать ложную связь силой target_correlation в [-1,1], по умолчанию 0.5), invert_correlation (инвертировать знак), shift_dependency (сдвиг наклона линейной зависимости до target_slope);\n"
     "   - структурные (таблица целиком): duplicate_rows, drop_column, rename_column, change_type, distribution_drift (дрейф распределения Y'=(Y+delta)*scale).\n"
     "   По умолчанию ячейки выбираются случайно (mechanism='ecar'). Если пользователь задает условие отбора строк (например, 'только у клиентов старше 40'), передай mechanism='enar' и condition — pandas-выражение по колонкам, например 'age > 40'.\n"
     "   Правила передавай в rules_json полным форматом: {\"marginal\": {колонка: {\"error_type\", \"error_rate\", \"mechanism\", \"condition\", \"intensity\"}}, \"pairwise\": [{\"col1\", \"col2\", \"action\", \"target_correlation\"?, \"target_slope\"?}], \"structural\": [{\"action\", \"columns\"?, ...}]}. Для силы шума используй intensity (доля std колонки), для точности — precision_loss с intensity=число знаков.\n"

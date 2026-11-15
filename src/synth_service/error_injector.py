@@ -176,26 +176,35 @@ class PairwiseDistortionConfig:
                           (по умолчанию 0.0 = полный разрыв через перестановку col2).
                           Если target_correlation != 0, исходный столбец смешивается с
                           переставленным в пропорции, обеспечивающей целевую корреляцию.
+    false_link          - ложная связь (ТЕЗИС): навязать корреляцию col1<->col2 силой
+                          target_correlation (по умолчанию 0.5) там, где её не было.
+                          Механизм тот же, что и у break_correlation с target != 0;
+                          маргинальные mean/std col2 сохраняются.
     invert_correlation  - инверсия знака зависимости.
     shift_dependency    - изменение наклона линейной зависимости col2 = a*col1 + b + eps
                           до target_slope (сохраняя маргинальное среднее/std col2).
     """
     col1: str
     col2: str
-    action: Literal["break_correlation", "invert_correlation", "shift_dependency"]
-    target_correlation: float = 0.0  # Для break_correlation: целевая корреляция в [-1, 1]
+    action: Literal["break_correlation", "false_link", "invert_correlation", "shift_dependency"]
+    # Для break_correlation/false_link: целевая корреляция в [-1, 1].
+    # None -> 0.0 для break_correlation и 0.5 для false_link (см. __post_init__).
+    target_correlation: float | None = None
     target_slope: float | None = None  # Для shift_dependency: целевой коэффициент при col1
 
     def __post_init__(self):
-        if self.action not in ("break_correlation", "invert_correlation", "shift_dependency"):
+        if self.action not in ("break_correlation", "false_link", "invert_correlation", "shift_dependency"):
             raise ValueError(
                 f"Неизвестное парное действие: {self.action!r}. "
-                f"Доступны: break_correlation, invert_correlation, shift_dependency"
+                f"Доступны: break_correlation, false_link, invert_correlation, shift_dependency"
             )
-        if self.action == "break_correlation" and not (-1.0 <= float(self.target_correlation) <= 1.0):
-            raise ValueError(
-                f"target_correlation должен быть в [-1, 1], получено: {self.target_correlation!r}"
-            )
+        if self.action in ("break_correlation", "false_link"):
+            if self.target_correlation is None:
+                self.target_correlation = 0.5 if self.action == "false_link" else 0.0
+            if not (-1.0 <= float(self.target_correlation) <= 1.0):
+                raise ValueError(
+                    f"target_correlation должен быть в [-1, 1], получено: {self.target_correlation!r}"
+                )
         if self.action == "shift_dependency" and self.target_slope is None:
             raise ValueError("shift_dependency требует target_slope (числовой коэффициент наклона)")
 
@@ -445,6 +454,18 @@ def inject_errors(
             series = corrupted_df[col]
             warnings.append(f"Колонка '{col}' приведена к float64 для шумового искажения")
 
+        # Значковые искажения пишут float/NaN в ячейки: pandas апкастит int64 -> float64,
+        # а bool + NaN -> object. Фиксируем это приведение явно (раньше это был
+        # неявный upcast с FutureWarning, в будущих pandas - ошибка присвоения).
+        if config.error_type in ("outlier", "numeric_typo", "missing") and pd.api.types.is_integer_dtype(series):
+            corrupted_df[col] = corrupted_df[col].astype("float64")
+            series = corrupted_df[col]
+            warnings.append(f"Колонка '{col}' приведена к float64 для '{config.error_type}'")
+        if config.error_type == "missing" and pd.api.types.is_bool_dtype(series):
+            corrupted_df[col] = corrupted_df[col].astype("object")
+            series = corrupted_df[col]
+            warnings.append(f"Колонка '{col}' приведена к object для 'missing' (bool не хранит NaN)")
+
         # Маска ячеек
         if config.mechanism == "enar":
             mask = (np_rng.random(len(series)) < config.error_rate) & enar_conditions[col] & non_null_mask.to_numpy()
@@ -509,12 +530,15 @@ def inject_errors(
         except Exception:
             orig_corr = None
 
-        if p_cfg.action == "break_correlation":
-            # ТЕЗИС: "ослабление или разрыв корреляционной связи".
-            # target_correlation == 0: чистая перестановка col2 -> корреляция ~0.
-            # target_correlation != 0: строим Y_new = target*r_z(x) + sqrt(1-target^2)*Y_shuffled_z
+        if p_cfg.action in ("break_correlation", "false_link"):
+            # ТЕЗИС: "разрыв корреляции" (break_correlation) и "ложная связь" (false_link).
+            # Общий механизм: стандартизуем X и Y, строим
+            #   Y_new = target * X_z + sqrt(1 - target^2) * Y_shuffled
             # (стандартизуем X и Y, смешиваем с нужным весом, денормализуем обратно к mean/std Y).
             # Сохраняет маргинальное mean/std col2, обеспечивает целевую корреляцию с col1.
+            # break_correlation: target=0 - чистая перестановка col2 (корреляция ~0);
+            # false_link: навязываем связь силой target_correlation (по умолчанию 0.5)
+            # там, где её не было.
             target = float(p_cfg.target_correlation)
             x = corrupted_df[p_cfg.col1]
             y = corrupted_df[p_cfg.col2]
@@ -523,11 +547,11 @@ def inject_errors(
                     and pd.api.types.is_numeric_dtype(y) and not pd.api.types.is_bool_dtype(y)):
                 skipped.append({
                     "column": f"{p_cfg.col1},{p_cfg.col2}",
-                    "config": "break_correlation",
+                    "config": p_cfg.action,
                     "reason": "columns_not_numeric",
                 })
                 warnings.append(
-                    f"break_correlation({p_cfg.col1}, {p_cfg.col2}): обе колонки должны быть "
+                    f"{p_cfg.action}({p_cfg.col1}, {p_cfg.col2}): обе колонки должны быть "
                     f"числовыми (не bool) - пропущено"
                 )
                 continue
@@ -539,11 +563,11 @@ def inject_errors(
             if valid.sum() < 3:
                 skipped.append({
                     "column": f"{p_cfg.col1},{p_cfg.col2}",
-                    "config": "break_correlation",
+                    "config": p_cfg.action,
                     "reason": "too_few_complete_rows",
                 })
                 warnings.append(
-                    f"break_correlation({p_cfg.col1}, {p_cfg.col2}): слишком мало полных строк - пропущено"
+                    f"{p_cfg.action}({p_cfg.col1}, {p_cfg.col2}): слишком мало полных строк - пропущено"
                 )
                 continue
 
@@ -568,6 +592,12 @@ def inject_errors(
                 np_rng.shuffle(shuffled)
                 coef = float(np.sqrt(max(0.0, 1.0 - target * target)))
                 y_new_z = target * x_z.to_numpy() + coef * shuffled
+                # Кросс-член cov(X_z, Y_shuffled) после перестановки не равен нулю
+                # точно - нормируем смесь к единичной выборочной дисперсии, чтобы
+                # std col2 сохранился точно, а корреляция была ближе к цели.
+                mix_std = float(np.std(y_new_z, ddof=1))
+                if mix_std > 1e-12:
+                    y_new_z = y_new_z / mix_std
 
             # Денормализация обратно к mean/std исходной col2
             y_new_vals = mu_y + sd_y * y_new_z
@@ -579,7 +609,7 @@ def inject_errors(
                 new_corr = None
 
             applied_pairwise.append({
-                "action": "break_correlation",
+                "action": p_cfg.action,
                 "col1": p_cfg.col1,
                 "col2": p_cfg.col2,
                 "original_correlation": orig_corr,
@@ -654,6 +684,11 @@ def inject_errors(
             np_rng.shuffle(z_y_shuffled)
             coef = float(np.sqrt(max(0.0, 1.0 - r_target * r_target)))
             z_y_new = r_target * z_x + coef * z_y_shuffled
+            # Нормировка смеси к единичной дисперсии (см. break_correlation):
+            # сохраняет std col2 точно при любом раскладе перестановки.
+            mix_std = float(np.std(z_y_new, ddof=1))
+            if mix_std > 1e-12:
+                z_y_new = z_y_new / mix_std
 
             # Денормализация к исходному mean/std col2
             y_new = mu_y + sd_y * z_y_new

@@ -30,6 +30,9 @@ _DATETIME_FORMATS = [
     "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d",
 ]
 
+# Код с ведущим нулём: "01234", "007" (но НЕ "0.3047" - после нуля идёт точка)
+_LEADING_ZERO_CODE_RE = re.compile(r"^[+-]?0\d+$")
+
 @dataclass
 class ColumnProfile:
     name: str
@@ -67,6 +70,11 @@ class TableProfile:
     n_cols: int
     columns: list[ColumnProfile]
     schema: dict[str, str] = field(default_factory=dict)
+    # ТЕЗИС: "Модуль профилирования анализирует исходную выборку:
+    # распределения, корреляции, типы признаков". Pearson-корреляции
+    # числовых признаков (идентификаторы и bool исключены), попарно по
+    # полным наблюдениям: {колонка: {колонка: значение | None}}.
+    correlation_matrix: dict[str, dict[str, float | None]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -246,20 +254,46 @@ def _extract_text_pattern(strings: list[str]) -> tuple[str, dict[str, Any]]:
 
     return "pattern", {"pattern": pattern, "length": most_common_len}
 
+def _looks_like_digit_code(strings: list[str]) -> bool:
+    """True для кодоподобных колонок: все значения - цифры одной длины >= 5.
+
+    Защищает артикулы/номера документов/индексы ("238535", "01234") от
+    превращения в числа. Колонки с точкой или разной длиной значений
+    ("0.3047", "25000" + "30125.5") остаются числовыми.
+    """
+    if not strings:
+        return False
+    lengths = {len(v) for v in strings}
+    if len(lengths) != 1:
+        return False
+    length = lengths.pop()
+    return length >= 5 and all(v.isdigit() for v in strings)
+
 def _parse_str_column(s: pd.Series) -> pd.Series:
+    """Разбор строковой колонки после pd.read_csv(dtype=str).
+
+    Решение о типе принимается по ВСЕЙ колонке, а не по первому значению.
+    Раньше колонка, первое значение которой начиналось с "0" (например,
+    float "0.3047..."), принудительно оставалась строкой, классифицировалась
+    как text и выпадала из копулы: на numeric_correlated.csv это теряло
+    межпризнаковые зависимости и генерировало псевдотекст вместо чисел.
+    """
     clean = s.dropna()
     if len(clean) == 0:
         return s
 
     try:
-        sample = clean.iloc[0]
-        if isinstance(sample, str):
-            if sample.startswith("0") or any(c in sample for c in "+ :"):
-                raise ValueError("Force string")
-            if sample.isdigit() and len(sample) >= 5:
-                raise ValueError("Force string (long digits)")
-                
-            _ = pd.to_numeric(clean, errors="raise")
+        if isinstance(clean.iloc[0], str):
+            # Числом колонка становится целиком: to_numeric обязан разобрать
+            # все значения; ":", внутренние пробелы и т.п. оставят её строкой.
+            pd.to_numeric(clean, errors="raise")
+            strings = clean.astype(str).tolist()
+            if any(v.startswith("+") for v in strings):
+                return s  # явный плюс - телефоны/коды ("+7999..."), а не числа
+            if _looks_like_digit_code(strings):
+                return s  # коды фиксированной длины: сохраняем строки
+            if any(_LEADING_ZERO_CODE_RE.match(v) for v in strings):
+                return s  # ведущий ноль значим ("007", "01234")
             return pd.to_numeric(s, errors="raise")
     except (ValueError, TypeError, AttributeError):
         pass
@@ -326,10 +360,39 @@ def profile_column(s: pd.Series) -> ColumnProfile:
             cp.min, cp.max = float(clean.astype("int64").min()), float(clean.astype("int64").max())
     return cp
 
+def _correlation_matrix(df: pd.DataFrame, columns: list[ColumnProfile]) -> dict[str, dict[str, float | None]]:
+    """Pearson-корреляции числовых колонок профиля (ТЕЗИС: профилирование корреляций).
+
+    Используется тот же коэффициент, что и в метрике Фробениуса
+    (frobenius_corr_metric). None вместо значения - для вырожденных
+    (константных) колонок, где корреляция не определена.
+    """
+    numeric_cols = [c.name for c in columns if c.kind == "numeric" and c.name in df.columns]
+    if len(numeric_cols) < 2:
+        return {}
+    sub = df[numeric_cols]
+    if len(sub.dropna()) < 3:
+        return {}
+    corr = sub.corr(method="pearson")
+    matrix: dict[str, dict[str, float | None]] = {}
+    for a in numeric_cols:
+        row: dict[str, float | None] = {}
+        for b in numeric_cols:
+            v = corr.loc[a, b]
+            row[b] = float(v) if pd.notna(v) else None
+        matrix[a] = row
+    return matrix
+
 def profile_table(df: pd.DataFrame) -> TableProfile:
     columns = [profile_column(df[c]) for c in df.columns]
     schema = {c.name: c.kind for c in columns}
-    return TableProfile(n_rows=len(df), n_cols=df.shape[1], columns=columns, schema=schema)
+    return TableProfile(
+        n_rows=len(df),
+        n_cols=df.shape[1],
+        columns=columns,
+        schema=schema,
+        correlation_matrix=_correlation_matrix(df, columns),
+    )
 
 def profile_csv(path: str) -> TableProfile:
     df_str = pd.read_csv(path, dtype=str)

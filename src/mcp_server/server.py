@@ -201,11 +201,14 @@ def generate_custom_distortions(
                     запятой оставить (по умолчанию 1)
 
        "pairwise" - список объектов для парных искажений (корреляция двух колонок):
-         {"col1", "col2", "action": "break_correlation" | "invert_correlation" | "shift_dependency"}
+         {"col1", "col2", "action": "break_correlation" | "false_link" | "invert_correlation" | "shift_dependency"}
          Для "break_correlation" можно задать "target_correlation" в [-1, 1]:
            - 0.0 (по умолчанию) - полный разрыв через перестановку col2;
            - любое значение в (-1, 1) - ослабление/усиление до целевой корреляции,
              сохраняя маргинальное mean/std col2.
+         Для "false_link" можно задать "target_correlation" в [-1, 1] (по умолчанию 0.5):
+           - создает ложную связь заданной силы между col1 и col2 там, где её
+             не было (класс "ложная связь"), сохраняя маргинальное mean/std col2.
          Для "shift_dependency" обязательно "target_slope" - новый наклон линейной
          зависимости col2 = a*col1 + b + eps (сохраняет mean/std col2, меняет форму связи).
 
@@ -222,7 +225,10 @@ def generate_custom_distortions(
        "intensity"}} - то же, что "marginal" без обёртки, ключ "rate" равнозначен "error_rate".
 
     В ответе: distortion_report (план/факт по каждой модели, предупреждения, пропуски,
-    структурные изменения) и applied_model - итоговая применённая модель искажений.
+    структурные изменения), applied_model - итоговая применённая модель искажений,
+    distortion_evaluation - метрики режима искажения (прирост дисперсии, сдвиг
+    корреляционной матрицы, выполнение целей парных искажений и совпадение схемы
+    с целевой: schema_matches_target / schema_match_score / schema_checks).
     """
     try:
         if not str(source_path).startswith("data/"):

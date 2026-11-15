@@ -6,7 +6,9 @@
     "phone": {"error_type": "typo", "error_rate": 0.2},
     "city": {"error_type": "category_swap", "error_rate": 0.1}
   },
-  "pairwise": [],
+  "pairwise": [
+    {"col1": "age", "col2": "orders_count", "action": "false_link", "target_correlation": 0.6}
+  ],
   "structural": [
     {"action": "duplicate_rows", "rate": 0.05},
     {"action": "change_type", "columns": ["age"], "new_type": "string"}

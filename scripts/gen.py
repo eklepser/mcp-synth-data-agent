@@ -210,7 +210,10 @@ def main() -> int:
         print(f"   Всего искажено ячеек: {corrupted_count}")
 
         # ТЕЗИС: измеряется соответствие фактического отклонения заданному: прирост дисперсии, сдвиг корреляционной матрицы
-        distortion_eval = evaluate_distortion(df, noisy_synth, distortion_report)
+        # Сравниваем synth_clean vs noisy_synth (как в MCP-туле): сравнение с реальным df
+        # смешивало бы ошибку генерации с эффектом искажений и ложно било бы по метрике
+        # "совпадение схемы с целевой" (например, datetime генерируется строками).
+        distortion_eval = evaluate_distortion(best_synth, noisy_synth, distortion_report)
         
         metrics = build_metrics_dict(
             source, out_csv_noisy, rows, args.similarity, best_score,
