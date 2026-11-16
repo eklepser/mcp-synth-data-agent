@@ -343,7 +343,13 @@ def evaluate_distortion(
     corrupted_df: pd.DataFrame,
     distortion_report: DistortionReport,
 ) -> DistortionEvaluationReport:
-    numeric_cols = [c for c in original_df.columns if pd.api.types.is_numeric_dtype(original_df[c]) and pd.api.types.is_numeric_dtype(corrupted_df[c])]
+    # Структурные drop_column/rename_column могут убрать/переименовать колонку:
+    # считаем метрики только по колонкам, которые есть в ОБОИХ фреймах.
+    # Отсутствующие/переименованные колонки отдельно проверяет _schema_match (п.4).
+    numeric_cols = [c for c in original_df.columns
+                    if c in corrupted_df.columns
+                    and pd.api.types.is_numeric_dtype(original_df[c])
+                    and pd.api.types.is_numeric_dtype(corrupted_df[c])]
     
     # 1. Сдвиг корреляционной матрицы (Норма Фробениуса)
     frob_shift = frobenius_corr_metric(original_df, corrupted_df, numeric_cols)

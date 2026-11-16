@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -32,7 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--max-attempts", type=int, default=5, help="Max regeneration attempts (default: 5)")
     p.add_argument("--out-dir", default="data/generated", help="Output directory (default: data/generated)")
     p.add_argument("--clip-to-range", action="store_true", help="Clip generated values to source min/max per numeric column")
-    p.add_argument("--nv", "--no-visualize", dest="no_visualize", action="store_true", help="Устарело: визуализация не реализована (флаг оставлен для совместимости)")
+    p.add_argument("--nv", "--no-visualize", dest="no_visualize", action="store_true", help="Do not open the visualization window")
     
     p.add_argument("--mode", choices=["clean", "noisy"], default="clean", help="Режим генерации: 'clean' или 'noisy'")
     p.add_argument("--error-config", type=str, default=None, help="Путь к JSON-файлу с конфигурацией ошибок")
@@ -241,10 +242,12 @@ def main() -> int:
         print(f"Saved CSV: {out_csv}")
         print(f"Saved metrics: {out_json}")
 
-    # Визуализация отключена: scripts/visualize.py - это MCP-сервер (копия
-    # старой версии server.py), а не скрипт построения графиков. Раньше запуск
-    # gen.py порождал посторонний MCP-процесс вместо окна визуализации.
-    _ = args.no_visualize  # флаг оставлен для совместимости CLI-вызовов
+    # Окно отчёта о генерации (PyQt6 GUI): visualize.py читает metrics-JSON
+    # и показывает таблицы source/generated и метрики качества.
+    # Работает и в noisy-режиме: distortion_report попадает в тот же JSON.
+    if not args.no_visualize:
+        vis_script = Path(__file__).parent / "visualize.py"
+        subprocess.Popen([sys.executable, str(vis_script), str(out_json)])
     return 0
 
 if __name__ == "__main__":
