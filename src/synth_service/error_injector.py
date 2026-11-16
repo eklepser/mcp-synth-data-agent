@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import Iterator
 from dataclasses import dataclass, field, asdict
 from typing import Any, Literal
 
@@ -10,7 +11,7 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import rankdata
 
-from synth_service.profile import TableProfile
+from synth_service.profile import TableProfile, _classify_series
 
 # ============================================================================
 # 1. ТИПЫ ОШИБОК (ErrorType)
@@ -114,6 +115,7 @@ class ColumnErrorConfig:
     mechanism: Literal["ecar", "enar"] = "ecar"
     condition: str | None = None
     intensity: float | None = None
+    matched_by: str | None = None  # внутреннее поле: селектор/группа, из которой получено правило
 
     def __post_init__(self):
         if isinstance(self.error_rate, bool) or not isinstance(self.error_rate, (int, float)) \
@@ -255,6 +257,7 @@ def _build_column_config(col: str, cfg_dict: dict) -> ColumnErrorConfig:
             f"Конфигурация колонки '{col}' должна быть JSON-объектом, получено: {type(cfg_dict).__name__}"
         )
     cfg = dict(cfg_dict)
+    cfg.pop("matched_by", None)  # внутреннее поле provenance, в пользовательских правилах игнорируется
     if "rate" in cfg and "error_rate" not in cfg:
         cfg["error_rate"] = cfg.pop("rate")
     unknown = set(cfg) - set(ColumnErrorConfig.__dataclass_fields__)
@@ -265,7 +268,120 @@ def _build_column_config(col: str, cfg_dict: dict) -> ColumnErrorConfig:
     except (TypeError, ValueError) as e:
         raise ValueError(f"Конфигурация колонки '{col}': {e}") from e
 
-def error_model_from_dict(data: dict) -> ErrorModel:
+# ============================================================================
+# 3.1 АДРЕСАЦИЯ МАРГИНАЛЬНЫХ ПРАВИЛ: столбец / группа столбцов / таблица
+# ============================================================================
+
+COLUMN_KINDS = ("numeric", "categorical", "boolean", "text", "datetime", "identifier")
+
+
+def _classify_columns(df: pd.DataFrame) -> dict[str, str]:
+    """Тип каждой колонки по классификации профайлера (без подбора распределений)."""
+    return {c: _classify_series(df[c]) for c in df.columns}
+
+
+def _resolve_selector(key: str, df: pd.DataFrame | None,
+                      kinds: dict[str, str]) -> list[str]:
+    """Разворачивает селектор '*' (все колонки) или '*<тип>' в список колонок."""
+    if df is None:
+        raise ValueError(
+            f"Селектор '{key}' требует передачи данных (df): соответствие колонок "
+            f"определяется по фактической таблице"
+        )
+    if key == "*":
+        return list(df.columns)
+    kind = key[1:]
+    if kind not in COLUMN_KINDS:
+        raise ValueError(
+            f"Неизвестный селектор '{key}'. Доступны: '*' и "
+            f"{', '.join('*' + k for k in COLUMN_KINDS)}"
+        )
+    cols = [c for c, k in kinds.items() if k == kind]
+    if not cols:
+        raise ValueError(
+            f"Селектор '{key}' не соответствует ни одной колонке таблицы; "
+            f"фактические типы колонок: {kinds}"
+        )
+    return cols
+
+
+def _iter_marginal_rules(
+    marginal_data: Any,
+    df: pd.DataFrame | None,
+    kinds: dict[str, str],
+) -> Iterator[tuple[str, dict, str | None]]:
+    """Итерирует правила секции 'marginal' в порядке следования.
+
+    Формы адресации («столбец, группа столбцов, таблица»):
+      1. Явная: {"<колонка>": {...}};
+      2. Селекторы: "*" - все колонки таблицы; "*numeric"/"*categorical"/
+         "*boolean"/"*text"/"*datetime"/"*identifier" - все колонки данного
+         типа (тип определяется профайлером по фактическому df);
+      3. Список правил: [{"columns": [...], ...}, ...] (или "column": "...").
+    Возвращает тройки (колонка, raw-config, matched_by). При пересечении
+    правил действует последнее в порядке следования - так задаются
+    исключения (сначала группа, затем правило для конкретной колонки).
+    """
+    if isinstance(marginal_data, dict):
+        for key, cfg_dict in marginal_data.items():
+            if not isinstance(cfg_dict, dict):
+                raise ValueError(
+                    f"Правило '{key}' должно быть JSON-объектом, "
+                    f"получено: {type(cfg_dict).__name__}"
+                )
+            if key.startswith("*"):
+                for col in _resolve_selector(key, df, kinds):
+                    yield col, cfg_dict, key
+            else:
+                yield key, cfg_dict, None
+    elif isinstance(marginal_data, list):
+        for i, entry in enumerate(marginal_data):
+            if not isinstance(entry, dict):
+                raise ValueError(f"Элемент marginal[{i}] должен быть JSON-объектом")
+            entry = dict(entry)
+            cols = entry.pop("columns", None)
+            if cols is None:
+                single = entry.pop("column", None)
+                cols = [single] if single is not None else None
+            if not cols or not isinstance(cols, list) \
+                    or not all(isinstance(c, str) for c in cols):
+                raise ValueError(
+                    f"Элемент marginal[{i}] должен содержать непустой список строк "
+                    f"'columns' (или одиночную строку 'column')"
+                )
+            matched_by = f"columns[{','.join(cols)}]"
+            for col in cols:
+                yield col, entry, matched_by
+    else:
+        raise ValueError(
+            "Секция 'marginal' должна быть JSON-объектом {колонка/селектор: правило} "
+            "или списком правил [{'columns': [...], ...}]"
+        )
+
+
+def _build_marginal_configs(marginal_data: Any,
+                            df: pd.DataFrame | None) -> dict[str, ColumnErrorConfig]:
+    """Разворачивает правила в плоский словарь {колонка: ColumnErrorConfig}."""
+    kinds = _classify_columns(df) if df is not None else {}
+    resolved: dict[str, tuple[dict, str | None]] = {}
+    for col, cfg_dict, matched_by in _iter_marginal_rules(marginal_data, df, kinds):
+        resolved[col] = (cfg_dict, matched_by)
+    configs: dict[str, ColumnErrorConfig] = {}
+    for col, (cfg_dict, matched_by) in resolved.items():
+        config = _build_column_config(col, cfg_dict)
+        config.matched_by = matched_by
+        configs[col] = config
+    return configs
+
+
+def error_model_from_dict(data: dict, df: pd.DataFrame | None = None) -> ErrorModel:
+    """Строит ErrorModel из словаря конфигурации.
+
+    df (опционально) нужен для групповой адресации marginal: селекторы '*',
+    '*numeric', '*categorical', '*boolean', '*text', '*datetime', '*identifier'
+    разворачиваются по фактическим типам колонок таблицы. Для явных правил
+    {колонка: {...}} df не требуется.
+    """
     if not isinstance(data, dict):
         raise ValueError("Конфигурация ошибок должна быть JSON-объектом")
 
@@ -276,9 +392,10 @@ def error_model_from_dict(data: dict) -> ErrorModel:
     else:
         marginal_data = data
 
-    configs = {}
-    for col, cfg_dict in marginal_data.items():
-        configs[col] = _build_column_config(col, cfg_dict)
+    if marginal_data:
+        configs = _build_marginal_configs(marginal_data, df)
+    else:
+        configs = {}
 
     pairwise = []
     for i, p in enumerate(data.get("pairwise") or []):
@@ -296,10 +413,15 @@ def error_model_from_dict(data: dict) -> ErrorModel:
 
     return ErrorModel(column_configs=configs, pairwise_configs=pairwise, structural_configs=structural)
 
-def load_error_model(json_path: str) -> ErrorModel:
+def load_error_model(json_path: str, df: pd.DataFrame | None = None) -> ErrorModel:
+    """Загружает модель искажений из JSON-файла.
+
+    df нужен только для селекторов групп ('*', '*numeric', ...): типы колонок
+    определяются по фактической таблице.
+    """
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return error_model_from_dict(data)
+    return error_model_from_dict(data, df=df)
 
 # ============================================================================
 # 4. ГЛАВНЫЙ ИНЖЕКТОР
@@ -536,14 +658,17 @@ def inject_errors(
         if planned > 0 and changed == 0:
             warnings.append(f"Колонка '{col}': выбрано {planned} ячеек, но ни одно значение фактически не изменилось")
 
-        applied_marginal.append({
+        entry = {
             "column": col,
             "type": config.error_type,
             "rate": config.error_rate,
             "mechanism": config.mechanism,
             "planned": planned,
             "corrupted": changed,
-        })
+        }
+        if config.matched_by:
+            entry["matched_by"] = config.matched_by
+        applied_marginal.append(entry)
 
     # 2. Парные искажения 
     applied_pairwise = []

@@ -1,0 +1,13 @@
+{
+  "marginal": {
+    "*numeric": {"error_type": "noise_additive", "error_rate": 0.25, "intensity": 0.15},
+    "balance": {"error_type": "precision_loss", "error_rate": 0.5, "intensity": 1},
+    "*categorical": {"error_type": "category_swap", "error_rate": 0.1},
+    "*boolean": {"error_type": "category_swap", "error_rate": 0.05},
+    "*text": {"error_type": "typo", "error_rate": 0.15},
+    "*datetime": {"error_type": "missing", "error_rate": 0.1},
+    "*identifier": {"error_type": "missing", "error_rate": 0.02}
+  },
+  "pairwise": [],
+  "structural": [{"action": "duplicate_rows", "rate": 0.05}]
+}

@@ -35,7 +35,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--nv", "--no-visualize", dest="no_visualize", action="store_true", help="Do not open the visualization window")
     
     p.add_argument("--mode", choices=["clean", "noisy"], default="clean", help="Режим генерации: 'clean' или 'noisy'")
-    p.add_argument("--error-config", type=str, default=None, help="Путь к JSON-файлу с конфигурацией ошибок")
+    p.add_argument("--error-config", type=str, default=None, help="Путь к JSON-файлу с конфигурацией ошибок (поддерживается групповая адресация: селекторы '*'/*numeric/... и списки 'columns')")
     p.add_argument("--auto-errors", action="store_true", help="Автоматически подобрать типы ошибок на основе профиля данных")
     p.add_argument("--auto-error-rate", type=float, default=0.1, help="Базовая вероятность ошибки для автогенерации")
     p.add_argument("--exclude-columns", type=str, default="", help="Столбцы, которые не нужно искажать (через запятую)")
@@ -186,7 +186,7 @@ def main() -> int:
                 print(f"Error: файл конфигурации не найден: {error_config_path}", file=sys.stderr)
                 return 2
             print(f"Загружаю модель ошибок из {error_config_path}...")
-            error_model = load_error_model(error_config_path)
+            error_model = load_error_model(error_config_path, df=df)
         else:
             print("Error: режим 'noisy' требует указания --error-config ИЛИ --auto-errors", file=sys.stderr)
             return 2

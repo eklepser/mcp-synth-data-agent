@@ -37,11 +37,16 @@ def _safe_json_dumps(data, **kwargs) -> str:
     return json.dumps(_clean_nan(data), **kwargs, allow_nan=False)
 
 
-def _error_model_from_rules_json(rules_json: str) -> tuple[ErrorModel | None, str | None]:
+def _error_model_from_rules_json(
+    rules_json: str,
+    df: pd.DataFrame | None = None,
+) -> tuple[ErrorModel | None, str | None]:
     """Разбирает rules_json в ErrorModel (общий путь для всех тулов искажений).
 
     Поддерживает полный формат {"marginal": {...}, "pairwise": [...], "structural": [...]}
     и плоский {колонка: {...}} (нормализуется в {"marginal": ...}, ключ rate -> error_rate).
+    df нужен для групповой адресации marginal: селекторы '*' и '*<тип>' разворачиваются
+    по фактическим типам колонок таблицы.
     Возвращает (model, None) либо (None, текст ошибки) - тулы переводят его в {"error": ...}.
     """
     try:
@@ -60,7 +65,7 @@ def _error_model_from_rules_json(rules_json: str) -> tuple[ErrorModel | None, st
         rules = {"marginal": flat}
 
     try:
-        return error_model_from_dict(rules), None
+        return error_model_from_dict(rules, df=df), None
     except (ValueError, TypeError) as e:
         return None, f"Некорректная модель искажений: {e}"
 
@@ -290,6 +295,21 @@ def generate_custom_distortions(
                     как доля std колонки; для precision_loss - сколько знаков после
                     запятой оставить (по умолчанию 1)
 
+       ГРУППОВАЯ АДРЕСАЦИЯ в "marginal" (столбец, группа столбцов, таблица):
+         селектор "*" - все колонки таблицы; "*numeric", "*categorical", "*boolean",
+         "*text", "*datetime", "*identifier" - все колонки данного типа (тип
+         определяется по фактическим данным). Альтернатива - список правил:
+         "marginal": [{"columns": ["age", "balance"], "error_type": ...}, ...]
+         (или "column": "age"). Правила применяются в порядке следования, при
+         пересечении действует последнее (удобно задавать исключения: сначала
+         группа, затем правило для конкретной колонки). Селектор, не
+         соответствующий ни одной колонке, - ошибка конфигурации. Пример
+         (шум на все числовые, кроме balance, где пропуски):
+           {"marginal": {"*numeric": {"error_type": "noise_additive", "error_rate": 0.2,
+            "intensity": 0.1}, "balance": {"error_type": "missing", "error_rate": 0.3}}}
+         В distortion_report и applied_model для правил из групп указывается
+         matched_by - каким селектором/группой было выбрано правило.
+
        "pairwise" - список объектов для парных искажений (корреляция двух колонок):
          {"col1", "col2", "action": "break_correlation" | "false_link" | "invert_correlation" | "shift_dependency"}
          Для "break_correlation" можно задать "target_correlation" в [-1, 1]:
@@ -337,14 +357,14 @@ def generate_custom_distortions(
         if not str(source_path).startswith("data/"):
             source_path = f"data/raw/{source_path}"
 
-        model, model_error = _error_model_from_rules_json(rules_json)
-        if model is None:
-            return _safe_json_dumps({"error": model_error})
-
         df_str = pd.read_csv(source_path, dtype=str)
         df = df_str.copy()
         for col in df_str.columns:
             df[col] = _parse_str_column(df_str[col])
+
+        model, model_error = _error_model_from_rules_json(rules_json, df=df)
+        if model is None:
+            return _safe_json_dumps({"error": model_error})
 
         prof = profile_csv(source_path)
         synth_clean = generate_table(df, prof, n=rows, random_state=random_state)
@@ -393,7 +413,8 @@ def distort_existing_csv(csv_path: str, rules_json: str, random_state: int = 42)
 
     csv_path - имя файла из data/raw/ или путь, начинающийся с "data/".
     rules_json - JSON со спецификацией искажений; формат полностью совпадает
-    с rules_json тула generate_custom_distortions:
+    с rules_json тула generate_custom_distortions (включая групповую адресацию
+    "marginal": селекторы "*"/*<тип> и списки правил "columns"):
       {"marginal": {колонка: {"error_type", "error_rate", "mechanism", "condition", "intensity"}},
        "pairwise": [{"col1", "col2", "action", "target_correlation"?, "target_slope"?}],
        "structural": [{"action", "columns"?, "rate"?, "constraint"?, "min_value"?, "max_value"?}]},
@@ -412,14 +433,14 @@ def distort_existing_csv(csv_path: str, rules_json: str, random_state: int = 42)
         if not Path(csv_path).exists():
             return _safe_json_dumps({"error": f"Файл не найден: {csv_path}"})
 
-        model, model_error = _error_model_from_rules_json(rules_json)
-        if model is None:
-            return _safe_json_dumps({"error": model_error})
-
         df_str = pd.read_csv(csv_path, dtype=str)
         df = df_str.copy()
         for col in df_str.columns:
             df[col] = _parse_str_column(df_str[col])
+
+        model, model_error = _error_model_from_rules_json(rules_json, df=df)
+        if model is None:
+            return _safe_json_dumps({"error": model_error})
 
         corrupted_df, error_mask, report = inject_errors(df, model, random_state=random_state)
 
