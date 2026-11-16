@@ -1,4 +1,3 @@
-# src/synth_service/metrics.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
@@ -183,23 +182,15 @@ def evaluate_reproduction(
     report.frobenius_corr = frobenius_corr_metric(real, synth, numeric_used)
     return report
 
-# ============================================================================
-# НОВОЕ: Оценка качества искажений (ТЕЗИС: прирост дисперсии, сдвиг корреляционной
-# матрицы, совпадение схемы с целевой)
-# ============================================================================
-
-# Типы маргинальных искажений, при которых инжектор гарантированно приводит
-# целочисленную колонку к float64 (явное приведение в error_injector)
 _INT_CASTING_MARGINAL_TYPES = frozenset(
     {"outlier", "numeric_typo", "missing", "noise_additive", "noise_multiplicative"}
 )
-# Парные действия, переписывающие col2 (float записывается в колонку)
+
 _COL2_REWRITING_PAIRWISE_ACTIONS = frozenset(
     {"break_correlation", "false_link", "invert_correlation", "shift_dependency"}
 )
 
 def _dtype_class(s: pd.Series) -> str:
-    """Коарс-класс dtype для сравнения схем (int/float/bool/datetime/string/numeric)."""
     if pd.api.types.is_bool_dtype(s):
         return "bool"
     if pd.api.types.is_datetime64_any_dtype(s):
@@ -213,7 +204,6 @@ def _dtype_class(s: pd.Series) -> str:
     return "string"
 
 def _target_dtype_class(dtype_str: str | None) -> str:
-    """Класс dtype из строки отчета change_type ("float64", "Int64", "datetime64[ns]"...)."""
     if not dtype_str:
         return "string"
     d = str(dtype_str).lower()
@@ -231,17 +221,6 @@ def _expected_schema(
     original_df: pd.DataFrame,
     distortion_report: DistortionReport,
 ) -> dict[str, str]:
-    """Целевая схема: схема original_df с учетом примененной модели искажений.
-
-    Учитываются документированные приведения типов инжектора:
-      - маргинальные outlier/numeric_typo/missing/noise_* на int -> float64;
-      - missing на bool -> object (bool не хранит NaN);
-      - парные действия переписывают col2 -> int-колонка становится float64;
-      - distribution_drift на int -> float64;
-      - change_type задает целевой dtype, drop_column удаляет колонку,
-        rename_column переименовывает.
-    Пропущенные (skipped) конфигурации целевую схему не меняют.
-    """
     expected = {c: _dtype_class(original_df[c]) for c in original_df.columns}
 
     for m in distortion_report.applied_marginal_models:
@@ -275,9 +254,6 @@ def _expected_schema(
             if col in expected and expected[col] == "integer":
                 expected[col] = "float"
         elif act == "violate_constraints":
-            # range пишет int в int-колонку (dtype сохраняется), unique копирует
-            # значения внутри колонки. Меняет схему только not_null: NaN не
-            # хранится в int64, bool не хранит NaN - инжектор кастует явно.
             col = s.get("column")
             if col in expected and s.get("constraint") == "not_null":
                 if expected[col] == "integer":
@@ -291,14 +267,6 @@ def _schema_match(
     corrupted_df: pd.DataFrame,
     distortion_report: DistortionReport,
 ) -> tuple[float, bool, list[dict]]:
-    """ТЕЗИС: "совпадение схемы с целевой".
-
-    Сравнивает фактическую схему corrupted_df с целевой (expected), построенной
-    из исходной схемы и примененной модели искажений. Возвращает
-    (score, matches_all, checks): score - доля совпавших колонок,
-    matches_all - полное совпадение (включая отсутствие лишних колонок),
-    checks - поэлементная детализация.
-    """
     expected = _expected_schema(original_df, distortion_report)
     checks: list[dict] = []
     matched = 0
@@ -330,7 +298,6 @@ class DistortionEvaluationReport:
     frobenius_corr_shift: float  # Норма Фробениуса разности корреляционных матриц
     variance_growth_avg: float   # Средний относительный прирост дисперсии
     pairwise_targets_met: list[dict] # Выполнение целей по парным искажениям
-    # ТЕЗИС: "совпадение схемы с целевой"
     schema_match_score: float = 1.0        # Доля колонок, совпавших с целевой схемой
     schema_matches_target: bool = True     # Полное совпадение схемы с целевой
     schema_checks: list[dict] = field(default_factory=list)  # Поэлементная детализация
@@ -343,9 +310,6 @@ def evaluate_distortion(
     corrupted_df: pd.DataFrame,
     distortion_report: DistortionReport,
 ) -> DistortionEvaluationReport:
-    # Структурные drop_column/rename_column могут убрать/переименовать колонку:
-    # считаем метрики только по колонкам, которые есть в ОБОИХ фреймах.
-    # Отсутствующие/переименованные колонки отдельно проверяет _schema_match (п.4).
     numeric_cols = [c for c in original_df.columns
                     if c in corrupted_df.columns
                     and pd.api.types.is_numeric_dtype(original_df[c])
@@ -382,7 +346,7 @@ def evaluate_distortion(
                     "success": success
                 })
 
-    # 4. ТЕЗИС: совпадение схемы с целевой
+    # 4. Совпадение схемы с целевой
     schema_score, schema_ok, schema_checks = _schema_match(original_df, corrupted_df, distortion_report)
 
     return DistortionEvaluationReport(

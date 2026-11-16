@@ -1,8 +1,3 @@
-"""Visualize generation metrics in a native PyQt6 window.
-
-Usage:
-    python scripts/visualize.py data/generated/users_complex_metrics.json
-"""
 from __future__ import annotations
 
 import json
@@ -125,7 +120,6 @@ class StatsTableModel(QAbstractTableModel):
                 if n is not None and uniq == n and n > 2:
                     return QBrush(_UNIQ_HIGH_COLOR)
             if col_name == "is unique":
-                # Надежная проверка: значение может быть bool, str или object
                 val_str = str(value).strip().lower()
                 if val_str in ("true", "yes", "1"):
                     return QBrush(_IS_UNIQUE_TRUE_COLOR)
@@ -229,7 +223,6 @@ def _stats_to_dataframe(stats: list[dict]) -> pd.DataFrame:
     for col in ["uniq", "is unique"]:
         if col not in df.columns:
             df[col] = None
-    # Перемещаем uniq и is unique сразу после n
     ordered = [
         "column", "kind", "n", "uniq", "is unique", "mean", "std", "min", "max",
         "top", "top share"

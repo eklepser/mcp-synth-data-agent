@@ -1,4 +1,3 @@
-# scripts/gen.py
 from __future__ import annotations
 
 import argparse
@@ -17,7 +16,7 @@ from synth_service.generate import generate_table
 from synth_service.metrics import evaluate_reproduction, evaluate_distortion
 
 def get_file_hash(filepath: Path) -> str:
-    """Вычисляет SHA256 хэш файла для версионирования данных (ТЕЗИС: интеграция с DVC/версионированием)"""
+    """Вычисляет SHA256 хэш файла для версионирования данных"""
     sha256_hash = hashlib.sha256()
     with open(filepath, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
@@ -47,8 +46,6 @@ def similarity_score(report, source_df: pd.DataFrame, synth_df: pd.DataFrame, pr
     tv_vals = [c.tv for c in report.columns if c.kind in ("categorical", "boolean") and c.tv is not None]
     stats_errors = []
     for c in profile.columns:
-        # Структурные искажения (change_type) могут сменить dtype - считаем
-        # числовую статистику только по колонкам, оставшимся числовыми
         if c.kind == "numeric" and c.name in source_df.columns and c.name in synth_df.columns \
                 and pd.api.types.is_numeric_dtype(source_df[c.name]) \
                 and pd.api.types.is_numeric_dtype(synth_df[c.name]):
@@ -117,7 +114,6 @@ def build_metrics_dict(source: Path, out_csv: Path, rows: int, target: float, ac
         "identifier_checks": [asdict(chk) for chk in report.identifier_checks],
         "text_checks": [asdict(chk) for chk in report.text_checks],
         "warnings": [],
-        # ТЕЗИС: интеграция с системами управления версиями данных
         "source_hash": get_file_hash(source),
         "generated_hash": get_file_hash(out_csv),
     }
@@ -173,7 +169,7 @@ def main() -> int:
         )
 
         if args.auto_errors:
-            print(f"🤖 Автоматически подбираю модель ошибок (rate={args.auto_error_rate})...")
+            print(f"Автоматически подбираю модель ошибок (rate={args.auto_error_rate})...")
             exclude_cols = [c.strip() for c in args.exclude_columns.split(",") if c.strip()]
             error_model = auto_error_model_from_profile(
                 profile=prof,
@@ -182,21 +178,21 @@ def main() -> int:
             )
             auto_config_path = out_dir / f"{stem}_auto_error_model.json"
             save_error_model(error_model, auto_config_path)
-            print(f"💾 Авто-модель сохранена: {auto_config_path}")
+            print(f"Авто-модель сохранена: {auto_config_path}")
             error_config_path = auto_config_path
         elif args.error_config:
             error_config_path = Path(args.error_config)
             if not error_config_path.exists():
                 print(f"Error: файл конфигурации не найден: {error_config_path}", file=sys.stderr)
                 return 2
-            print(f"🔧 Загружаю модель ошибок из {error_config_path}...")
+            print(f"Загружаю модель ошибок из {error_config_path}...")
             error_model = load_error_model(error_config_path)
         else:
             print("Error: режим 'noisy' требует указания --error-config ИЛИ --auto-errors", file=sys.stderr)
             return 2
 
-        print("🔧 Применяю модель ошибок...")
-        # ТЕЗИС: возвращая структурированный отчёт
+        print("Применяю модель ошибок...")
+
         noisy_synth, error_mask, distortion_report = inject_errors(best_synth, error_model, random_state=args.random_state)
 
         out_csv_noisy = out_dir / f"{stem}_generated_noisy.csv"
@@ -205,14 +201,10 @@ def main() -> int:
         error_mask.astype(int).to_csv(out_mask_csv, index=False)
 
         corrupted_count = int(error_mask.to_numpy().sum())
-        print(f"✅ Сохранён зашумлённый CSV: {out_csv_noisy}")
-        print(f"✅ Сохранена карта ошибок: {out_mask_csv}")
-        print(f"   Всего искажено ячеек: {corrupted_count}")
+        print(f"Сохранён зашумлённый CSV: {out_csv_noisy}")
+        print(f"Сохранена карта ошибок: {out_mask_csv}")
+        print(f"Всего искажено ячеек: {corrupted_count}")
 
-        # ТЕЗИС: измеряется соответствие фактического отклонения заданному: прирост дисперсии, сдвиг корреляционной матрицы
-        # Сравниваем synth_clean vs noisy_synth (как в MCP-туле): сравнение с реальным df
-        # смешивало бы ошибку генерации с эффектом искажений и ложно било бы по метрике
-        # "совпадение схемы с целевой" (например, datetime генерируется строками).
         distortion_eval = evaluate_distortion(best_synth, noisy_synth, distortion_report)
         
         metrics = build_metrics_dict(
@@ -242,9 +234,6 @@ def main() -> int:
         print(f"Saved CSV: {out_csv}")
         print(f"Saved metrics: {out_json}")
 
-    # Окно отчёта о генерации (PyQt6 GUI): visualize.py читает metrics-JSON
-    # и показывает таблицы source/generated и метрики качества.
-    # Работает и в noisy-режиме: distortion_report попадает в тот же JSON.
     if not args.no_visualize:
         vis_script = Path(__file__).parent / "visualize.py"
         subprocess.Popen([sys.executable, str(vis_script), str(out_json)])

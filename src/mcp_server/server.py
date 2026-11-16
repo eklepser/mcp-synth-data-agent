@@ -24,11 +24,8 @@ def _clean_nan(obj):
     elif isinstance(obj, list):
         return [_clean_nan(v) for v in obj]
     elif isinstance(obj, (pd.Timestamp, datetime.datetime, datetime.date, np.datetime64)):
-        # Реальные выборки после парсинга содержат datetime64: sample_data
-        # даёт pd.Timestamp, который json.dumps не сериализует.
         return None if pd.isna(obj) else str(obj)
     elif isinstance(obj, np.generic):
-        # np.int64 / np.float64 / np.bool_ в JSON не сериализуются
         return obj.item()
     elif isinstance(obj, float):
         if math.isnan(obj) or math.isinf(obj):
@@ -54,8 +51,6 @@ def _error_model_from_rules_json(rules_json: str) -> tuple[ErrorModel | None, st
     if not isinstance(rules, dict):
         return None, "rules_json должен быть JSON-объектом"
 
-    # Совместимость со старым форматом тула: плоский {колонка: {..., "rate": ...}}
-    # нормализуем в {"marginal": ...} и далее единый путь.
     if "marginal" not in rules and "pairwise" not in rules and "structural" not in rules:
         flat = {}
         for col, rule in rules.items():
@@ -101,8 +96,6 @@ def profile_data(csv_path: str) -> str:
     или путь, начинающийся с "data/".
     """
     try:
-        # Нормализация пути - та же, что в остальных тулах: агент передаёт
-        # имя файла из list_available_files без префикса data/raw/
         if not str(csv_path).startswith("data/"):
             csv_path = f"data/raw/{csv_path}"
         prof = profile_csv(csv_path)
@@ -313,9 +306,6 @@ def generate_custom_distortions(
 
         eval_report = evaluate_reproduction(df, synth_noisy, profile=prof)
 
-        # ТЕЗИС: "В режиме искажения измеряется соответствие фактического отклонения
-        # заданному: прирост дисперсии, сдвиг корреляционной матрицы, совпадение схемы
-        # с целевой." Без этого вызова у LLM-агента нет метрик режима искажения.
         distortion_eval = evaluate_distortion(synth_clean, synth_noisy, report)
 
         sample_df = synth_noisy.head(50)
@@ -380,9 +370,6 @@ def distort_existing_csv(csv_path: str, rules_json: str, random_state: int = 42)
         for col in df_str.columns:
             df[col] = _parse_str_column(df_str[col])
 
-        # ТЕЗИС: "В режиме искажения источником может служить как реальная,
-        # так и синтетическая выборка" - здесь источник подаётся на вход
-        # инжектору напрямую, без этапа генерации.
         corrupted_df, error_mask, report = inject_errors(df, model, random_state=random_state)
 
         _ensure_output_dirs()
@@ -392,9 +379,6 @@ def distort_existing_csv(csv_path: str, rules_json: str, random_state: int = 42)
         corrupted_df.to_csv(out_path, index=False)
         error_mask.astype(int).to_csv(mask_path, index=False)
 
-        # ТЕЗИС: "В режиме искажения измеряется соответствие фактического отклонения
-        # заданному: прирост дисперсии, сдвиг корреляционной матрицы, совпадение
-        # схемы с целевой." Оценка считается относительно исходной (реальной) выборки.
         distortion_eval = evaluate_distortion(df, corrupted_df, report)
 
         sample_df = corrupted_df.head(50)

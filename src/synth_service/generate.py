@@ -14,17 +14,6 @@ _DIST_BY_NAME = dict(_NUMERIC_CANDIDATES)
 
 
 def _ppf_from_profile(u: np.ndarray, col: ColumnProfile) -> np.ndarray | None:
-    """Обратная функция распределения (ppf) маргинала, выбранного на профилировании.
-
-    ТЕЗИС: копулы "раздельно описывают маргинальные распределения и структуру
-    зависимостей". Ранги копула-выборки равномерны на (0, 1), поэтому после
-    применения ppf выбранного по AIC распределения маргинал колонки совпадает
-    с подобранной статистической моделью, а ранговая (Spearman) зависимость
-    между колонками сохраняется без изменений.
-
-    Возвращает None, если fit непригоден (нет параметров, вырожденный scale,
-    нефинитный ppf) - вызывающий код откатывается к эмпирическим квантилям.
-    """
     name = col.distribution
     params = col.dist_params or {}
     if not name or name not in _DIST_BY_NAME or not params:
@@ -49,27 +38,6 @@ def _ppf_from_profile(u: np.ndarray, col: ColumnProfile) -> np.ndarray | None:
 
 
 def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_state: int = 42, clip_to_range: bool = True) -> pd.DataFrame:
-    """Генерация числовых колонок: гауссова копула + восстановление маргиналов.
-
-    ТЕЗИС: "копулы... позволяют раздельно описывать маргинальные распределения
-    и структуру зависимостей". Конвейер:
-      1) гауссова копула (fit_copula) задаёт зависимость между колонками;
-      2) копула-выборка переводится рангами в равномерные точки u на (0, 1):
-         ранги любой непрерывной выборки равномерны, поэтому ранговая
-         (Spearman) структура зависимости сохраняется точно;
-      3) маргинал каждой колонки восстанавливается обратной функцией
-         распределения (ppf):
-         - основной вариант - распределение, подобранное модулем
-           профилирования по AIC (статистическая модель из тезисов);
-         - резервный - эмпирические квантили исходной выборки;
-         вариант выбирается по критерию Колмогорова-Смирнова против
-         исходных данных, поэтому маргинал колонки максимально близок
-         к оригиналу.
-
-    Раньше здесь применялось аффинное min-макс масштабирование с подгонкой
-    std, которое разрушало форму скошенных распределений (у колонки balance
-    на users_complex.csv KS достигал 0.51 при асимметрии исходных данных 3.6).
-    """
     numeric_cols = [c.name for c in profile.columns if c.kind == "numeric"]
     if not numeric_cols:
         return pd.DataFrame()
@@ -86,7 +54,6 @@ def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_sta
         if not finite.any():
             continue
 
-        # Ранги копула-выборки -> равномерные точки u на (0, 1)
         ranks = rankdata(raw[finite], method="average")
         u = (ranks - 0.5) / len(ranks)
 
@@ -97,9 +64,6 @@ def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_sta
             if real.size >= 2:
                 v_emp = np.quantile(real, u)
                 if v_param is not None:
-                    # ТЕЗИС: оценка качества по критерию Колмогорова-Смирнова -
-                    # выбираем реконструкцию маргинала, статистически более
-                    # близкую к исходной выборке
                     ks_param = float(ks_2samp(real, v_param).statistic)
                     ks_emp = float(ks_2samp(real, v_emp).statistic)
                     chosen = v_param if ks_param <= ks_emp else v_emp
@@ -108,7 +72,7 @@ def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_sta
         if chosen is None:
             chosen = v_param
         if chosen is None:
-            continue  # нет ни пригодного fit, ни исходных данных - оставляем копула-значения
+            continue  
 
         vals = raw.copy()
         vals[finite] = chosen
@@ -123,9 +87,6 @@ def generate_numeric(df: pd.DataFrame, profile: TableProfile, n: int, random_sta
                 rounded = np.minimum(rounded, np.ceil(c.max))
             synth[c.name] = rounded.astype("int64")
         else:
-            # clip_to_range ограничивает float исходным диапазоном; по умолчанию
-            # выключен: подгонка хвостов подобранного распределения важнее,
-            # а компактность выборки и так следует из маргинала
             if clip_to_range and c.min is not None and c.max is not None:
                 vals = np.clip(vals, c.min, c.max)
             synth[c.name] = vals
@@ -185,16 +146,6 @@ def generate_datetime(profile: TableProfile, n: int, random_state: int = 42) -> 
 
 
 def _unique_values(n: int, producer, py_rng: random.Random) -> list[str]:
-    """Собирает n уникальных значений в ПОРЯДКЕ ГЕНЕРАЦИИ (детерминизм между процессами).
-
-    Раньше значения собирались в set, а list(set) упорядочивался по хэшам строк:
-    при фиксированном random_state разные процессы (PYTHONHASHSEED) получали
-    разный порядок строк, и файлы имели разные контрольные суммы. Здесь set
-    используется только для проверки вхождения (она не зависит от рандомизации
-    хэшей), порядок списка совпадает с порядком генерации. Если пространство
-    значений меньше n, после исчерпания попыток добираем повторами (раньше
-    это был вечный цикл; в ветке pattern так и было через padding).
-    """
     seen: set[str] = set()
     items: list[str] = []
     for _ in range(max(n * 10, 1000)):

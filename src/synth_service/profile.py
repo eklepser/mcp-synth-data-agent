@@ -30,7 +30,6 @@ _DATETIME_FORMATS = [
     "%d.%m.%Y", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d",
 ]
 
-# Код с ведущим нулём: "01234", "007" (но НЕ "0.3047" - после нуля идёт точка)
 _LEADING_ZERO_CODE_RE = re.compile(r"^[+-]?0\d+$")
 
 @dataclass
@@ -70,10 +69,7 @@ class TableProfile:
     n_cols: int
     columns: list[ColumnProfile]
     schema: dict[str, str] = field(default_factory=dict)
-    # ТЕЗИС: "Модуль профилирования анализирует исходную выборку:
-    # распределения, корреляции, типы признаков". Pearson-корреляции
-    # числовых признаков (идентификаторы и bool исключены), попарно по
-    # полным наблюдениям: {колонка: {колонка: значение | None}}.
+
     correlation_matrix: dict[str, dict[str, float | None]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -244,11 +240,6 @@ def _extract_text_pattern(strings: list[str]) -> tuple[str, dict[str, Any]]:
             continue
             
         if all(t.isalpha() for t in tokens):
-            # Порядок слов должен быть детерминирован: list(set) упорядочивается
-            # по хэшам строк (PYTHONHASHSEED), поэтому запечённый в pattern
-            # список слов различался между процессами - и генерация текстовых
-            # колонок с фиксированным random_state давала разные результаты.
-            # dict.fromkeys сохраняет порядок первого вхождения.
             unique_words = list(dict.fromkeys(tokens))
             is_lower = all(t.islower() for t in tokens)
             is_upper = all(t.isupper() for t in tokens)
@@ -260,12 +251,7 @@ def _extract_text_pattern(strings: list[str]) -> tuple[str, dict[str, Any]]:
     return "pattern", {"pattern": pattern, "length": most_common_len}
 
 def _looks_like_digit_code(strings: list[str]) -> bool:
-    """True для кодоподобных колонок: все значения - цифры одной длины >= 5.
 
-    Защищает артикулы/номера документов/индексы ("238535", "01234") от
-    превращения в числа. Колонки с точкой или разной длиной значений
-    ("0.3047", "25000" + "30125.5") остаются числовыми.
-    """
     if not strings:
         return False
     lengths = {len(v) for v in strings}
@@ -275,30 +261,21 @@ def _looks_like_digit_code(strings: list[str]) -> bool:
     return length >= 5 and all(v.isdigit() for v in strings)
 
 def _parse_str_column(s: pd.Series) -> pd.Series:
-    """Разбор строковой колонки после pd.read_csv(dtype=str).
 
-    Решение о типе принимается по ВСЕЙ колонке, а не по первому значению.
-    Раньше колонка, первое значение которой начиналось с "0" (например,
-    float "0.3047..."), принудительно оставалась строкой, классифицировалась
-    как text и выпадала из копулы: на numeric_correlated.csv это теряло
-    межпризнаковые зависимости и генерировало псевдотекст вместо чисел.
-    """
     clean = s.dropna()
     if len(clean) == 0:
         return s
 
     try:
         if isinstance(clean.iloc[0], str):
-            # Числом колонка становится целиком: to_numeric обязан разобрать
-            # все значения; ":", внутренние пробелы и т.п. оставят её строкой.
             pd.to_numeric(clean, errors="raise")
             strings = clean.astype(str).tolist()
             if any(v.startswith("+") for v in strings):
-                return s  # явный плюс - телефоны/коды ("+7999..."), а не числа
+                return s  
             if _looks_like_digit_code(strings):
-                return s  # коды фиксированной длины: сохраняем строки
+                return s  
             if any(_LEADING_ZERO_CODE_RE.match(v) for v in strings):
-                return s  # ведущий ноль значим ("007", "01234")
+                return s 
             return pd.to_numeric(s, errors="raise")
     except (ValueError, TypeError, AttributeError):
         pass
@@ -366,12 +343,6 @@ def profile_column(s: pd.Series) -> ColumnProfile:
     return cp
 
 def _correlation_matrix(df: pd.DataFrame, columns: list[ColumnProfile]) -> dict[str, dict[str, float | None]]:
-    """Pearson-корреляции числовых колонок профиля (ТЕЗИС: профилирование корреляций).
-
-    Используется тот же коэффициент, что и в метрике Фробениуса
-    (frobenius_corr_metric). None вместо значения - для вырожденных
-    (константных) колонок, где корреляция не определена.
-    """
     numeric_cols = [c.name for c in columns if c.kind == "numeric" and c.name in df.columns]
     if len(numeric_cols) < 2:
         return {}

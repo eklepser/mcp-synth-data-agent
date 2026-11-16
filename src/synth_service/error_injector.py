@@ -1,21 +1,3 @@
-# src/synth_service/error_injector.py
-#
-# Модуль искажений. Изменения (патч "пункты 1-3" по результатам ревизии):
-#   1. ENAR-условия вычисляются на ПОЛНОМ фрейме (можно ссылаться на любые
-#      колонки) и по ИСХОДНЫМ данным (результат не зависит от порядка
-#      конфигураций); валидация конфигураций (error_rate в [0,1], известные
-#      типы/механизмы, enar требует condition); любые пропуски конфигураций
-#      фиксируются в отчёте (warnings/skipped) вместо молчаливых.
-#   2. numeric_typo больше не роняет float() (дублируются только цифровые
-#      символы; варианты без эффекта заменяются на shift); typo на
-#      datetime64-колонках отключён (в auto-модели datetime -> missing).
-#   3. Каталог расширен до тезисов: шум (noise_additive / noise_multiplicative),
-#      потеря точности (precision_loss) и структурные искажения
-#      (duplicate_rows, drop_column, rename_column, change_type).
-#   4. ТЕЗИС "нарушение ограничений" - реализовано violate_constraints:
-#      unique - нарушение уникальности, range - значения вне заявленного
-#      диапазона, not_null - NaN в обязательной колонке; авто-модель теперь
-#      искажает и идентификаторы.
 from __future__ import annotations
 
 import json
@@ -44,14 +26,6 @@ def _shift(value: float, rng: random.Random) -> float:
     return value * rng.choice([0.1, 10.0])
 
 def apply_numeric_typo(value: float, rng: random.Random) -> float:
-    """Опечатка в строковом представлении числа.
-
-    "duplicate_digit" дублирует только цифровой символ: раньше задвоение '.'
-    или '-' давало float(...) -> ValueError и роняло весь конвейер.
-    Варианты, которые фактически не меняют значение (нет нуля в строке,
-    задвоение хвостового нуля и т.п.), заменяются на "shift", чтобы
-    фактический уровень искажений соответствовал заявленному.
-    """
     s = str(value)
     kind = rng.choice(["shift", "drop_zero", "duplicate_digit"])
     if kind == "shift":
@@ -62,7 +36,6 @@ def apply_numeric_typo(value: float, rng: random.Random) -> float:
             if new_value != value:
                 return new_value
         return _shift(value, rng)
-    # duplicate_digit
     digit_positions = [i for i, ch in enumerate(s) if ch.isdigit()]
     if not digit_positions:
         return _shift(value, rng)
@@ -93,14 +66,10 @@ ERROR_TYPE_FUNCS = {
     "category_swap": apply_category_swap,
 }
 
-# Типы, обрабатываемые векторно (получают сразу массив выбранных значений):
-#  - noise_additive / noise_multiplicative: модели шума из тезисов
-#  - precision_loss: потеря точности (округление) из тезисов
 VECTORIZED_ERROR_TYPES = ("noise_additive", "noise_multiplicative", "precision_loss")
 
 MARGINAL_ERROR_TYPES = set(ERROR_TYPE_FUNCS) | set(VECTORIZED_ERROR_TYPES)
 
-# Типы, применимые только к числовым (не bool) колонкам
 NUMERIC_ONLY_ERROR_TYPES = {
     "numeric_typo", "outlier",
     "noise_additive", "noise_multiplicative", "precision_loss",
@@ -114,12 +83,6 @@ def get_ecar_mask(n: int, error_rate: float, rng: np.random.Generator) -> np.nda
     return rng.random(n) < error_rate
 
 def _eval_enar_condition(df: pd.DataFrame, condition: str) -> np.ndarray:
-    """Вычисляет ENAR-условие на полном фрейме.
-
-    Раньше условие оценивалось на фрейме из одной колонки, поэтому ссылка на
-    другую колонку падала с ValueError - а зависимость от значений других
-    столбцов и есть суть ENAR.
-    """
     try:
         evaluated = df.eval(condition)
     except Exception as e:
@@ -143,15 +106,6 @@ def get_enar_mask(df: pd.DataFrame, error_rate: float, condition: str,
 
 @dataclass
 class ColumnErrorConfig:
-    """Конфигурация маргинального искажения одной колонки.
-
-    error_rate - доля ячеек (маскируемых по ecar/enar), которые планируется
-                 исказить; строго в [0, 1] (раньше любые значения проходили молча).
-    intensity  - сила искажения помимо доли ячеек (ТЕЗИС: "типа и интенсивности"):
-                 noise_additive       - sigma шума как доля std колонки (по умолчанию 0.1);
-                 noise_multiplicative - sigma относительного шума (по умолчанию 0.1);
-                 precision_loss       - сколько знаков после запятой оставить (по умолчанию 1).
-    """
     error_type: Literal["typo", "numeric_typo", "outlier", "missing", "category_swap",
                         "noise_additive", "noise_multiplicative", "precision_loss"]
     error_rate: float
@@ -174,27 +128,12 @@ class ColumnErrorConfig:
 
 @dataclass
 class PairwiseDistortionConfig:
-    """Конфигурация для парных искажений (ТЕЗИС: разрыв, ослабление, ложная связь, инверсия, сдвиг).
-
-    break_correlation   - ослабление/разрыв корреляции col1<->col2 до target_correlation
-                          (по умолчанию 0.0 = полный разрыв через перестановку col2).
-                          Если target_correlation != 0, исходный столбец смешивается с
-                          переставленным в пропорции, обеспечивающей целевую корреляцию.
-    false_link          - ложная связь (ТЕЗИС): навязать корреляцию col1<->col2 силой
-                          target_correlation (по умолчанию 0.5) там, где её не было.
-                          Механизм тот же, что и у break_correlation с target != 0;
-                          маргинальные mean/std col2 сохраняются.
-    invert_correlation  - инверсия знака зависимости.
-    shift_dependency    - изменение наклона линейной зависимости col2 = a*col1 + b + eps
-                          до target_slope (сохраняя маргинальное среднее/std col2).
-    """
     col1: str
     col2: str
     action: Literal["break_correlation", "false_link", "invert_correlation", "shift_dependency"]
-    # Для break_correlation/false_link: целевая корреляция в [-1, 1].
-    # None -> 0.0 для break_correlation и 0.5 для false_link (см. __post_init__).
+
     target_correlation: float | None = None
-    target_slope: float | None = None  # Для shift_dependency: целевой коэффициент при col1
+    target_slope: float | None = None  
 
     def __post_init__(self):
         if self.action not in ("break_correlation", "false_link", "invert_correlation", "shift_dependency"):
@@ -215,46 +154,22 @@ class PairwiseDistortionConfig:
 STRUCTURAL_ACTIONS = ("duplicate_rows", "drop_column", "rename_column", "change_type",
                       "distribution_drift", "violate_constraints")
 CHANGE_TYPE_TARGETS = ("float", "int", "string", "datetime")
-# ТЕЗИС: "нарушение ограничений" - типы ограничений, поддерживаемые violate_constraints
+
 CONSTRAINT_TARGETS = ("unique", "range", "not_null")
 
 @dataclass
 class StructuralDistortionConfig:
-    """Структурное искажение (ТЕЗИС: класс структурных - таблица в целом).
-
-    duplicate_rows      - дублирование rate-доли строк;
-    drop_column         - удаление колонок из columns;
-    rename_column       - переименование columns[0] в new_name;
-    change_type         - смена типа columns[0] на new_type (float/int/string/datetime);
-    distribution_drift  - дрейф распределения числовой колонки columns[0]:
-                          Y' = (Y + delta) * scale
-                          (delta - аддитивный сдвиг, по умолчанию 0;
-                           scale - мультипликативный масштаб, по умолчанию 1).
-                          Соответствует тезису "дрейф распределений" - сдвиг маргинала
-                          всей колонки при сохранении формы.
-    violate_constraints - ТЕЗИС "нарушение ограничений": ломает заявленное ограничение
-                          колонки, не меняя её тип:
-                          constraint="unique"   - копирует значения из других строк,
-                                                  создавая дубликаты (анализ primary key);
-                          constraint="range"    - вставляет значения вне заявленного
-                                                  допустимого диапазона [min_value, max_value]
-                                                  (анализ CHECK); требуется ровно одна
-                                                  колонка и min_value и/или max_value;
-                          constraint="not_null" - вставляет NaN в заполненную колонку
-                                                  (анализ NOT NULL); int -> float64,
-                                                  bool -> object (см. metrics._expected_schema).
-    """
     action: Literal["duplicate_rows", "drop_column", "rename_column", "change_type",
                     "distribution_drift", "violate_constraints"]
     columns: list[str] = field(default_factory=list)
     new_name: str | None = None
     new_type: str | None = None
     rate: float = 0.05
-    delta: float = 0.0   # Для distribution_drift: аддитивный сдвиг
-    scale: float = 1.0   # Для distribution_drift: мультипликативный масштаб
-    constraint: str | None = None  # Для violate_constraints: unique | range | not_null
-    min_value: float | None = None # Для violate_constraints + range: нижняя граница диапазона
-    max_value: float | None = None # Для violate_constraints + range: верхняя граница диапазона
+    delta: float = 0.0   
+    scale: float = 1.0   
+    constraint: str | None = None  
+    min_value: float | None = None 
+    max_value: float | None = None 
 
     def __post_init__(self):
         if self.action not in STRUCTURAL_ACTIONS:
@@ -297,17 +212,6 @@ class StructuralDistortionConfig:
 
 @dataclass
 class DistortionReport:
-    """Структурированный отчет о примененных искажениях (ТЕЗИС: возвращая структурированный отчёт)
-
-    planned_cells_count   - сколько ячеек выбрано масками (план);
-    corrupted_cells_count - сколько ячеек фактически изменено (функция искажения
-                            могла не изменить выбранное значение);
-    no_op_cells_count     - выбраны маской, но фактически не изменились
-                            (раньше это расхождение было невидимым);
-    warnings              - проблемы конфигурации/данных, не остановившие выполнение;
-    skipped               - пропущенные конфигурации с причиной (раньше пропуски
-                            были молчаливыми).
-    """
     target_error_rate: float
     actual_error_rate: float
     corrupted_cells_count: int
@@ -344,7 +248,6 @@ def _build_column_config(col: str, cfg_dict: dict) -> ColumnErrorConfig:
             f"Конфигурация колонки '{col}' должна быть JSON-объектом, получено: {type(cfg_dict).__name__}"
         )
     cfg = dict(cfg_dict)
-    # Совместимость со старым форматом MCP-тула: "rate" -> "error_rate"
     if "rate" in cfg and "error_rate" not in cfg:
         cfg["error_rate"] = cfg.pop("rate")
     unknown = set(cfg) - set(ColumnErrorConfig.__dataclass_fields__)
@@ -356,11 +259,6 @@ def _build_column_config(col: str, cfg_dict: dict) -> ColumnErrorConfig:
         raise ValueError(f"Конфигурация колонки '{col}': {e}") from e
 
 def error_model_from_dict(data: dict) -> ErrorModel:
-    """Строит ErrorModel из словаря конфигурации (тот же формат, что читает load_error_model).
-
-    Поддерживаются формат {"marginal": {...}, "pairwise": [...], "structural": [...]}
-    и плоский {"колонка": {...}} (раньше плоский формат молча давал 0 искажений).
-    """
     if not isinstance(data, dict):
         raise ValueError("Конфигурация ошибок должна быть JSON-объектом")
 
@@ -392,7 +290,6 @@ def error_model_from_dict(data: dict) -> ErrorModel:
     return ErrorModel(column_configs=configs, pairwise_configs=pairwise, structural_configs=structural)
 
 def load_error_model(json_path: str) -> ErrorModel:
-    """Загружает модель ошибок из JSON-файла (см. error_model_from_dict)."""
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return error_model_from_dict(data)
@@ -430,9 +327,6 @@ def inject_errors(
     skipped: list[dict] = []
     warnings: list[str] = []
 
-    # Предварительный проход: молчаливые пропуски -> skipped/warnings,
-    # ENAR-условия вычисляются на ИСХОДНОМ фрейме (до любых изменений), чтобы
-    # результат не зависел от порядка конфигураций в модели.
     enar_conditions: dict[str, np.ndarray] = {}
     for col, config in model.column_configs.items():
         if col not in df.columns:
@@ -445,13 +339,11 @@ def inject_errors(
     # 1. Маргинальные искажения
     for col, config in model.column_configs.items():
         if col not in corrupted_df.columns:
-            continue  # уже зафиксировано в skipped/warnings на предварительном проходе
+            continue  
 
         series = corrupted_df[col]
         non_null_mask = series.notna()
 
-        # typo неприменим к datetime64: подмена символов даёт непарсируемые строки
-        # и молча ломает тип колонки
         if config.error_type == "typo" and pd.api.types.is_datetime64_any_dtype(series):
             skipped.append({"column": col, "config": "typo", "reason": "typo_not_supported_for_datetime"})
             warnings.append(
@@ -488,15 +380,11 @@ def inject_errors(
                 )
                 continue
 
-        # Шум меняет дробные значения; целочисленную колонку приводим к float64 явно
         if config.error_type in ("noise_additive", "noise_multiplicative") and pd.api.types.is_integer_dtype(series):
             corrupted_df[col] = corrupted_df[col].astype("float64")
             series = corrupted_df[col]
             warnings.append(f"Колонка '{col}' приведена к float64 для шумового искажения")
 
-        # Значковые искажения пишут float/NaN в ячейки: pandas апкастит int64 -> float64,
-        # а bool + NaN -> object. Фиксируем это приведение явно (раньше это был
-        # неявный upcast с FutureWarning, в будущих pandas - ошибка присвоения).
         if config.error_type in ("outlier", "numeric_typo", "missing") and pd.api.types.is_integer_dtype(series):
             corrupted_df[col] = corrupted_df[col].astype("float64")
             series = corrupted_df[col]
@@ -506,7 +394,6 @@ def inject_errors(
             series = corrupted_df[col]
             warnings.append(f"Колонка '{col}' приведена к object для 'missing' (bool не хранит NaN)")
 
-        # Маска ячеек
         if config.mechanism == "enar":
             mask = (np_rng.random(len(series)) < config.error_rate) & enar_conditions[col] & non_null_mask.to_numpy()
         else:
@@ -555,7 +442,7 @@ def inject_errors(
             "corrupted": changed,
         })
 
-    # 2. Парные искажения (ТЕЗИС: разрыв корреляции и др.)
+    # 2. Парные искажения 
     applied_pairwise = []
 
     for p_cfg in model.pairwise_configs:
@@ -571,14 +458,6 @@ def inject_errors(
             orig_corr = None
 
         if p_cfg.action in ("break_correlation", "false_link"):
-            # ТЕЗИС: "разрыв корреляции" (break_correlation) и "ложная связь" (false_link).
-            # Общий механизм: стандартизуем X и Y, строим
-            #   Y_new = target * X_z + sqrt(1 - target^2) * Y_shuffled
-            # (стандартизуем X и Y, смешиваем с нужным весом, денормализуем обратно к mean/std Y).
-            # Сохраняет маргинальное mean/std col2, обеспечивает целевую корреляцию с col1.
-            # break_correlation: target=0 - чистая перестановка col2 (корреляция ~0);
-            # false_link: навязываем связь силой target_correlation (по умолчанию 0.5)
-            # там, где её не было.
             target = float(p_cfg.target_correlation)
             x = corrupted_df[p_cfg.col1]
             y = corrupted_df[p_cfg.col2]
@@ -596,11 +475,6 @@ def inject_errors(
                 )
                 continue
 
-            # Парное действие записывает дробные значения в col2: int64 приводим
-            # к float64 явно (как в маргинальном блоке выше) - иначе pandas
-            # делает неявный upcast с FutureWarning, а в pandas >= 3 присвоение
-            # упадёт с ошибкой. Метрики (_COL2_REWRITING_PAIRWISE_ACTIONS)
-            # уже ожидают float для col2 этих действий.
             if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
                 corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
                 warnings.append(
@@ -627,30 +501,22 @@ def inject_errors(
             mu_x = float(x_clean[valid].mean())
             sd_x = float(x_clean[valid].std(ddof=1)) or 1.0
 
-            # Стандартизованные значения (только на valid)
             x_z = (x_clean[valid] - mu_x) / sd_x
             y_z = (y_clean[valid] - mu_y) / sd_y
 
             if abs(target) < 1e-9:
-                # Простой разрыв: переставляем Y
                 shuffled = y_z.to_numpy().copy()
                 np_rng.shuffle(shuffled)
                 y_new_z = shuffled
             else:
-                # Y_new = target * X_z + sqrt(1 - target^2) * Y_shuffled_z
-                # Корреляция X_z и Y_new_z равна target при независимом Y_shuffled_z.
                 shuffled = y_z.to_numpy().copy()
                 np_rng.shuffle(shuffled)
                 coef = float(np.sqrt(max(0.0, 1.0 - target * target)))
                 y_new_z = target * x_z.to_numpy() + coef * shuffled
-                # Кросс-член cov(X_z, Y_shuffled) после перестановки не равен нулю
-                # точно - нормируем смесь к единичной выборочной дисперсии, чтобы
-                # std col2 сохранился точно, а корреляция была ближе к цели.
                 mix_std = float(np.std(y_new_z, ddof=1))
                 if mix_std > 1e-12:
                     y_new_z = y_new_z / mix_std
 
-            # Денормализация обратно к mean/std исходной col2
             y_new_vals = mu_y + sd_y * y_new_z
             corrupted_df.loc[valid[valid].index, p_cfg.col2] = y_new_vals.astype("float64")
 
@@ -668,9 +534,6 @@ def inject_errors(
                 "target_correlation": p_cfg.target_correlation
             })
         elif p_cfg.action == "shift_dependency":
-            # ТЕЗИС: "сдвиг зависимости" - изменить наклон линейной связи col2 = a*col1 + b + eps
-            # до target_slope, сохранив маргинальное среднее/std col2 (форма зависимости меняется,
-            # а маргинал col2 остаётся прежним по первым двум моментам).
             x = corrupted_df[p_cfg.col1]
             y = corrupted_df[p_cfg.col2]
 
@@ -687,9 +550,6 @@ def inject_errors(
                 )
                 continue
 
-            # Тот же явный каст int64 -> float64, что и в break_correlation/false_link:
-            # запись дробных значений в int-колонку без каста даёт неявный upcast
-            # (FutureWarning в pandas 2.x, ошибка в pandas >= 3).
             if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
                 corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
                 warnings.append(
@@ -714,10 +574,6 @@ def inject_errors(
             xv = x_clean[valid].to_numpy()
             yv = y_clean[valid].to_numpy()
 
-            # ТЕЗИС: "сдвиг зависимости" - изменить наклон линейной связи при сохранении
-            # маргинального mean/std col2. Делаем через стандартизованное смешивание:
-            # slope = corr * std_y / std_x  =>  corr_target = target_slope * std_x / std_y.
-            # Если |corr_target| > 1, цель недостижима при сохранении std_y.
             mu_x, sd_x = float(xv.mean()), float(xv.std(ddof=1)) or 1.0
             mu_y, sd_y = float(yv.mean()), float(yv.std(ddof=1)) or 1.0
             r_target = float(p_cfg.target_slope) * sd_x / sd_y
@@ -735,7 +591,6 @@ def inject_errors(
                 )
                 continue
 
-            # Исходный наклон (для отчёта)
             a_orig = float(np.cov(xv, yv, ddof=1)[0, 1] / (np.var(xv, ddof=1) or 1e-12))
 
             z_x = (xv - mu_x) / sd_x
@@ -744,17 +599,14 @@ def inject_errors(
             np_rng.shuffle(z_y_shuffled)
             coef = float(np.sqrt(max(0.0, 1.0 - r_target * r_target)))
             z_y_new = r_target * z_x + coef * z_y_shuffled
-            # Нормировка смеси к единичной дисперсии (см. break_correlation):
-            # сохраняет std col2 точно при любом раскладе перестановки.
+
             mix_std = float(np.std(z_y_new, ddof=1))
             if mix_std > 1e-12:
                 z_y_new = z_y_new / mix_std
 
-            # Денормализация к исходному mean/std col2
             y_new = mu_y + sd_y * z_y_new
             corrupted_df.loc[valid[valid].index, p_cfg.col2] = y_new.astype("float64")
 
-            # Пересчитаем фактический наклон
             try:
                 a_fact = float(np.cov(xv, y_new, ddof=1)[0, 1] / (np.var(xv, ddof=1) or 1e-12))
             except Exception:
@@ -770,7 +622,6 @@ def inject_errors(
                 "original_correlation": orig_corr,
             })
         elif p_cfg.action == "invert_correlation":
-            # Инверсия знака (для числовых)
             if pd.api.types.is_numeric_dtype(corrupted_df[p_cfg.col2]) \
                     and not pd.api.types.is_bool_dtype(corrupted_df[p_cfg.col2]):
                 mean_val = corrupted_df[p_cfg.col2].mean()
@@ -795,7 +646,7 @@ def inject_errors(
                     f"не числовая - пропущено"
                 )
 
-    # 3. Структурные искажения (ТЕЗИС: класс структурных - таблица в целом)
+    # 3. Структурные искажения 
     applied_structural: list[dict] = []
 
     for s_cfg in model.structural_configs:
@@ -852,7 +703,6 @@ def inject_errors(
                 if s_cfg.new_type == "float":
                     corrupted_df[c] = pd.to_numeric(corrupted_df[c], errors="coerce").astype("float64")
                 elif s_cfg.new_type == "int":
-                    # Nullable Int64: переживает NaN, не роняя приведение
                     corrupted_df[c] = pd.to_numeric(corrupted_df[c], errors="coerce").astype("Int64")
                 elif s_cfg.new_type == "string":
                     corrupted_df[c] = corrupted_df[c].astype(str)
@@ -875,9 +725,6 @@ def inject_errors(
                 warnings.append(f"change_type для '{c}' не выполнен: {e}")
 
         elif s_cfg.action == "distribution_drift":
-            # ТЕЗИС: "дрейф распределений" - сдвиг маргинала колонки целиком.
-            # Y' = (Y + delta) * scale - форма распределения сохраняется,
-            # но его положение и/или масштаб дрейфуют.
             c = s_cfg.columns[0]
             if c not in corrupted_df.columns:
                 skipped.append({"column": c, "config": "distribution_drift", "reason": "column_not_found"})
@@ -892,7 +739,6 @@ def inject_errors(
                 continue
             before_mean = float(series.dropna().mean()) if series.notna().any() else None
             before_std = float(series.dropna().std(ddof=1)) if series.notna().sum() > 1 else None
-            # Приводим к float64 явно, чтобы избежать целочисленного переполнения
             if pd.api.types.is_integer_dtype(series):
                 corrupted_df[c] = series.astype("float64")
                 series = corrupted_df[c]
@@ -915,12 +761,6 @@ def inject_errors(
             })
 
         elif s_cfg.action == "violate_constraints":
-            # ТЕЗИС: "нарушение ограничений" - структурный класс (таблица в целом).
-            # unique   - копирует значения из других строк, создавая дубликаты
-            #            (аналог ограничения уникальности / primary key);
-            # range    - вставляет значения вне заявленного диапазона
-            #            [min_value, max_value] (аналог CHECK);
-            # not_null - вставляет NaN в обязательную колонку (аналог NOT NULL).
             for c in s_cfg.columns:
                 if c not in corrupted_df.columns:
                     skipped.append({"column": c, "config": "violate_constraints", "reason": "column_not_found"})
@@ -948,7 +788,7 @@ def inject_errors(
                     n_target = min(n_target, len(non_null_idx))
                     pos = np_rng.choice(len(non_null_idx), size=n_target, replace=False)
                     target_idx = non_null_idx[pos]
-                    # Донор != цель: сдвиг на случайный ненулевой шаг по кольцу позиций
+
                     donor_pos = (pos + np_rng.integers(1, len(non_null_idx), size=n_target)) % len(non_null_idx)
                     donor_idx = non_null_idx[donor_pos]
                     donor_vals = corrupted_df.loc[donor_idx, c].to_numpy()
@@ -999,8 +839,6 @@ def inject_errors(
                     offset = 0.1 * base
 
                     def _violation_value() -> float:
-                        # Только нижняя граница - нарушаем вниз; только верхняя - вверх;
-                        # обе - случайно в одну из сторон
                         if lo is not None and hi is not None and np_rng.random() < 0.5:
                             return lo - np_rng.uniform(0.2, 1.0) * offset
                         if hi is not None:
@@ -1015,7 +853,6 @@ def inject_errors(
                         old = corrupted_df.at[idx, c]
                         v = _violation_value()
                         if is_int:
-                            # Пишем int, чтобы сохранить dtype колонки (схема не меняется)
                             v = int(round(v))
                             corrupted_df.at[idx, c] = v
                         else:
@@ -1041,8 +878,6 @@ def inject_errors(
                     })
 
                 elif s_cfg.constraint == "not_null":
-                    # NaN не хранится в int64, bool не хранит NaN - те же явные касты,
-                    # что и у маргинального 'missing' (см. блок выше)
                     if pd.api.types.is_integer_dtype(series):
                         corrupted_df[c] = series.astype("float64")
                         series = corrupted_df[c]
@@ -1117,7 +952,7 @@ def auto_error_model_from_profile(
 
     Маргинальные: numeric - выбросы, categorical/boolean - смена категории,
     text - опечатки, datetime - пропуски.
-    Структурные (ТЕЗИС: "нарушение ограничений"): identifier - нарушение
+    Структурные: identifier - нарушение
     уникальности (unique), numeric - выход за наблюдаемый диапазон
     (range с границами min/max из профиля).
     """
@@ -1140,11 +975,8 @@ def auto_error_model_from_profile(
         elif kind == "text":
             configs[col_name] = ColumnErrorConfig(error_type="typo", error_rate=error_rate, mechanism="ecar")
         elif kind == "datetime":
-            # Раньше здесь был 'typo': подмена символов в дате даёт непарсируемые
-            # строки. Пропуски контролируемы и сохраняют тип колонки.
             configs[col_name] = ColumnErrorConfig(error_type="missing", error_rate=error_rate, mechanism="ecar")
 
-        # ТЕЗИС: "нарушение ограничений" - структурный класс искажений
         if kind == "identifier" and col_profile.id_is_integer:
             structural_configs.append(StructuralDistortionConfig(
                 action="violate_constraints", columns=[col_name], constraint="unique", rate=error_rate,
