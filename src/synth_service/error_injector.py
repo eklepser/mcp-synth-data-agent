@@ -596,6 +596,17 @@ def inject_errors(
                 )
                 continue
 
+            # Парное действие записывает дробные значения в col2: int64 приводим
+            # к float64 явно (как в маргинальном блоке выше) - иначе pandas
+            # делает неявный upcast с FutureWarning, а в pandas >= 3 присвоение
+            # упадёт с ошибкой. Метрики (_COL2_REWRITING_PAIRWISE_ACTIONS)
+            # уже ожидают float для col2 этих действий.
+            if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
+                corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
+                warnings.append(
+                    f"Колонка '{p_cfg.col2}' приведена к float64 для '{p_cfg.action}'"
+                )
+
             x_clean = x.astype("float64")
             y_clean = y.astype("float64")
             valid = x_clean.notna() & y_clean.notna()
@@ -675,6 +686,15 @@ def inject_errors(
                     f"числовыми (не bool) - пропущено"
                 )
                 continue
+
+            # Тот же явный каст int64 -> float64, что и в break_correlation/false_link:
+            # запись дробных значений в int-колонку без каста даёт неявный upcast
+            # (FutureWarning в pandas 2.x, ошибка в pandas >= 3).
+            if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
+                corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
+                warnings.append(
+                    f"Колонка '{p_cfg.col2}' приведена к float64 для '{p_cfg.action}'"
+                )
 
             x_clean = x.astype("float64")
             y_clean = y.astype("float64")

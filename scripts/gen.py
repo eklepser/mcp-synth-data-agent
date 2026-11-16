@@ -195,7 +195,7 @@ def main() -> int:
             print("Error: режим 'noisy' требует указания --error-config ИЛИ --auto-errors", file=sys.stderr)
             return 2
 
-        print(f"🔧 Применяю модель ошибок...")
+        print("🔧 Применяю модель ошибок...")
         # ТЕЗИС: возвращая структурированный отчёт
         noisy_synth, error_mask, distortion_report = inject_errors(best_synth, error_model, random_state=args.random_state)
 

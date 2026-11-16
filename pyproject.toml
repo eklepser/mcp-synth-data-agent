@@ -8,7 +8,16 @@ dependencies = [
     "scipy>=1.11",
     "copulas>=0.12",
     "PyQt6>=6.6",
-    "matplotlib>=3.8"  
+    "matplotlib>=3.8",
+    # MCP-сервер (src/mcp_server/server.py, scripts/run_mcp.py):
+    # FastMCP lives в mcp.server.fastmcp и переименован в mcp 2.x
+    # (MCPServer), код сервера рассчитан на API 1.x.
+    "mcp>=1.2,<2",
+    # MCP-клиент (src/mcp_client/agent.py)
+    "python-dotenv>=1.0",
+    "langchain-gigachat>=0.3",
+    "langchain-mcp-adapters>=0.1",
+    "langgraph>=0.2"
 ]
 
 [build-system]
