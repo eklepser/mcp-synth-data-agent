@@ -144,8 +144,8 @@ def _get_combined_stats(df: pd.DataFrame, synth: pd.DataFrame, eval_report):
                         "is_unique": int(s.nunique()) == len(s)
                     }
 
-            rows.append(get_row_stats(r_clean, c.kind, ""))
-            rows.append(get_row_stats(s_clean, c.kind, ""))
+            rows.append(get_row_stats(r_clean, c.kind, "real_"))
+            rows.append(get_row_stats(s_clean, c.kind, "synth_"))
     return rows
 
 
@@ -157,7 +157,15 @@ def generate_dataset(
     max_attempts: int = 5,
     random_state: int = 42
 ) -> str:
-    """Генерирует чистую синтетику, стремясь к заданному сходству (similarity)."""
+    """Генерирует чистую синтетику, стремясь к заданному сходству (similarity).
+
+    Помимо статистик, в ответ возвращает диагностику для агента: attempts_used,
+    similarity_components (вклад каждой метрики в итоговый score),
+    metrics_by_column (по-колоночные KS/TV/JS) и weak_columns - колонки,
+    сильнее всего отклоняющиеся от исходных данных. По ним агент может
+    скорректировать параметры (max_attempts, target_similarity) и повторить
+    генерацию.
+    """
     try:
         if not str(source_path).startswith("data/"):
             source_path = f"data/raw/{source_path}"
@@ -172,8 +180,10 @@ def generate_dataset(
         best_synth = None
         best_report = None
         best_score = -1.0
+        attempts_used = 0
 
         for attempt in range(max_attempts):
+            attempts_used = attempt + 1
             rs = random_state + attempt
             synth = generate_table(df, prof, n=rows, random_state=rs)
             report = evaluate_reproduction(df, synth, profile=prof)
@@ -206,12 +216,46 @@ def generate_dataset(
                 pass
         sample_data = _clean_nan(sample_df.head(10).to_dict(orient="records"))
 
+        metrics_by_column = [
+            {"name": c.name, "kind": c.kind, "ks": c.ks, "ks_p_value": c.ks_p_value,
+             "tv": c.tv, "js": c.js}
+            for c in best_report.columns
+        ]
+
+        weak_columns = []
+        for c in best_report.columns:
+            candidates = []
+            if c.ks is not None:
+                candidates.append(("ks", float(c.ks)))
+            if c.tv is not None:
+                candidates.append(("tv", float(c.tv)))
+            if c.js is not None and np.isfinite(c.js):
+                candidates.append(("js", min(float(c.js), 1.0)))
+            if candidates:
+                metric_name, metric_value = max(candidates, key=lambda kv: kv[1])
+                weak_columns.append(
+                    {"column": c.name, "metric": metric_name, "value": round(metric_value, 4)}
+                )
+        weak_columns = sorted(weak_columns, key=lambda d: -d["value"])[:3]
+
+        diag_ks = [c.ks for c in best_report.columns if c.ks is not None]
+        diag_tv = [c.tv for c in best_report.columns if c.tv is not None]
+        similarity_components = {
+            "mean_ks": float(np.mean(diag_ks)) if diag_ks else None,
+            "mean_tv": float(np.mean(diag_tv)) if diag_tv else None,
+            "frobenius_corr": best_report.frobenius_corr,
+        }
+
         result = {
             "source_file": str(source_path),
             "generated_csv": str(out_path),
             "generated_rows": len(best_synth),
             "target_similarity": target_similarity,
             "achieved_similarity": best_score,
+            "attempts_used": attempts_used,
+            "similarity_components": similarity_components,
+            "metrics_by_column": metrics_by_column,
+            "weak_columns": weak_columns,
             "mode": "clean",
             "column_stats": _get_combined_stats(df, best_synth, best_report),
             "sample_data": sample_data
@@ -257,6 +301,13 @@ def generate_custom_distortions(
              не было (класс "ложная связь"), сохраняя маргинальное mean/std col2.
          Для "shift_dependency" обязательно "target_slope" - новый наклон линейной
          зависимости col2 = a*col1 + b + eps (сохраняет mean/std col2, меняет форму связи).
+         Для break_correlation, false_link и shift_dependency опционально "method":
+         "rearrangement" (по умолчанию; маргинальное распределение col2 сохраняется
+         В ТОЧНОСТИ - это перестановка его значений, целевая корреляция достигается
+         с высокой точностью; если цель недостижима перестановкой, применяется
+         ближайшая достижимая с предупреждением) или "mixture" (прежний механизм:
+         точная целевая корреляция Пирсона, сохраняются только mean/std col2,
+         форма распределения меняется).
 
        "structural" - список объектов для искажений таблицы в целом:
          {"action": "duplicate_rows", "rate": 0.1} - продублировать rate-долю строк

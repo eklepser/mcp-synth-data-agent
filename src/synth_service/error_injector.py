@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from scipy import stats
+from scipy.stats import rankdata
 
 from synth_service.profile import TableProfile
 
@@ -132,6 +134,7 @@ class PairwiseDistortionConfig:
     col2: str
     action: Literal["break_correlation", "false_link", "invert_correlation", "shift_dependency"]
 
+    method: Literal["rearrangement", "mixture"] = "rearrangement"
     target_correlation: float | None = None
     target_slope: float | None = None  
 
@@ -150,6 +153,10 @@ class PairwiseDistortionConfig:
                 )
         if self.action == "shift_dependency" and self.target_slope is None:
             raise ValueError("shift_dependency требует target_slope (числовой коэффициент наклона)")
+        if self.method not in ("rearrangement", "mixture"):
+            raise ValueError(
+                f"method должен быть 'rearrangement' или 'mixture', получено: {self.method!r}"
+            )
 
 STRUCTURAL_ACTIONS = ("duplicate_rows", "drop_column", "rename_column", "change_type",
                       "distribution_drift", "violate_constraints")
@@ -308,6 +315,102 @@ def _value_changed(old: Any, new: Any) -> bool:
         return bool(old != new)
     except Exception:
         return str(old) != str(new)
+
+def _pearson(a: np.ndarray, b: np.ndarray) -> float:
+    """Корреляция Пирсона с защитой от вырожденных случаев (NaN/константа -> 0.0)."""
+    if len(a) < 2 or len(b) < 2:
+        return 0.0
+    c = np.corrcoef(a, b)[0, 1]
+    return float(c) if np.isfinite(c) else 0.0
+
+def _ordinal_ranks(values: np.ndarray) -> np.ndarray:
+    ranks = np.empty(len(values), dtype=np.int64)
+    ranks[np.argsort(values, kind="stable")] = np.arange(len(values), dtype=np.int64)
+    return ranks
+
+def _gaussian_scores(values: np.ndarray) -> np.ndarray:
+    """Гауссовы scores эмпирического распределения: Ф^{-1}((rank - 0.5) / n)."""
+    ranks = rankdata(values, method="average")
+    u = (ranks - 0.5) / len(values)
+    return stats.norm.ppf(u)
+
+def _mixture_rewrite(y: np.ndarray, x: np.ndarray, target: float,
+                     rng: np.random.Generator) -> np.ndarray:
+    """Прежний механизм: z-смесь col1 и перемешанной col2.
+
+    Точно достигает целевой корреляции Пирсона и сохраняет mean/std col2,
+    но меняет форму маргинального распределения col2 (кроме target=0,
+    когда это фактически перестановка значений).
+    """
+    mu_y, sd_y = float(np.mean(y)), float(np.std(y, ddof=1)) or 1.0
+    mu_x, sd_x = float(np.mean(x)), float(np.std(x, ddof=1)) or 1.0
+    z_x = (x - mu_x) / sd_x
+    z_y = (y - mu_y) / sd_y
+
+    if abs(target) < 1e-9:
+        y_new_z = z_y.copy()
+        rng.shuffle(y_new_z)
+    else:
+        shuffled = z_y.copy()
+        rng.shuffle(shuffled)
+        coef = float(np.sqrt(max(0.0, 1.0 - target * target)))
+        y_new_z = target * z_x + coef * shuffled
+        mix_std = float(np.std(y_new_z, ddof=1))
+        if mix_std > 1e-12:
+            y_new_z = y_new_z / mix_std
+    return mu_y + sd_y * y_new_z
+
+def _permute_to_target(x: np.ndarray, y: np.ndarray, target: float,
+                       rng: np.random.Generator, max_iter: int = 14,
+                       tol: float = 2e-3,
+                       ) -> tuple[np.ndarray, float, bool, tuple[float, float]]:
+    """Строит y' - ПЕРЕСТАНОВКУ значений y, максимально близкую по корреляции
+    Пирсона с x к целевой. Маргинальное распределение col2 сохраняется
+    в точности (мультимножество значений не меняется).
+
+    Механизм: гауссова связка над рангами x с коэффициентом r_eff;
+    ранги связки задают перестановку отсортированного y. Коэффициент
+    подбирается бисекцией по фактической корреляции Пирсона, поэтому целевая
+    корреляция достигается с высокой точностью (tol), если она лежит в
+    достижимых для перестановок границах [контрамонотонная, комонотонная];
+    иначе target обрезается до ближайшей границы (clamped=True).
+
+    Возвращает (y_new, achieved_pearson, clamped, (r_min, r_max)).
+    """
+    y_asc = np.sort(y)
+    rx = _ordinal_ranks(x)
+    r_max = _pearson(x, y_asc[rx])          # комонотонная перестановка (максимум)
+    r_min = _pearson(x, y_asc[rx[::-1]])    # контрамонотонная (минимум)
+    lo_bound, hi_bound = min(r_min, r_max), max(r_min, r_max)
+    t = float(min(max(target, lo_bound), hi_bound))
+    clamped = abs(t - target) > 1e-6
+
+    z_x = _gaussian_scores(x)
+    z_h = rng.standard_normal(len(x))
+
+    def build(r_eff: float) -> np.ndarray:
+        coef = float(np.sqrt(max(0.0, 1.0 - r_eff * r_eff)))
+        u = stats.norm.cdf(r_eff * z_x + coef * z_h)
+        return y_asc[_ordinal_ranks(u)]
+
+    y0 = build(t)
+    r0 = _pearson(x, y0)
+    best_y, best_r, best_diff = y0, r0, abs(r0 - t)
+
+    lo, hi = -1.0, 1.0
+    for _ in range(max_iter):
+        if best_diff < tol:
+            break
+        mid = 0.5 * (lo + hi)
+        y_mid = build(mid)
+        r_mid = _pearson(x, y_mid)
+        if abs(r_mid - t) < best_diff:
+            best_y, best_r, best_diff = y_mid, r_mid, abs(r_mid - t)
+        if r_mid < t:
+            lo = mid
+        else:
+            hi = mid
+    return best_y, float(best_r), clamped, (float(lo_bound), float(hi_bound))
 
 def inject_errors(
     df: pd.DataFrame,
@@ -475,12 +578,6 @@ def inject_errors(
                 )
                 continue
 
-            if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
-                corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
-                warnings.append(
-                    f"Колонка '{p_cfg.col2}' приведена к float64 для '{p_cfg.action}'"
-                )
-
             x_clean = x.astype("float64")
             y_clean = y.astype("float64")
             valid = x_clean.notna() & y_clean.notna()
@@ -496,29 +593,37 @@ def inject_errors(
                 )
                 continue
 
-            mu_y = float(y_clean[valid].mean())
-            sd_y = float(y_clean[valid].std(ddof=1)) or 1.0
-            mu_x = float(x_clean[valid].mean())
-            sd_x = float(x_clean[valid].std(ddof=1)) or 1.0
+            x_vals = x_clean[valid].to_numpy(dtype="float64")
+            y_vals = y_clean[valid].to_numpy(dtype="float64")
 
-            x_z = (x_clean[valid] - mu_x) / sd_x
-            y_z = (y_clean[valid] - mu_y) / sd_y
-
-            if abs(target) < 1e-9:
-                shuffled = y_z.to_numpy().copy()
-                np_rng.shuffle(shuffled)
-                y_new_z = shuffled
+            clamped = False
+            bounds: tuple[float, float] | None = None
+            if p_cfg.method == "mixture":
+                y_new = _mixture_rewrite(y_vals, x_vals, target, np_rng)
+                marginal_preserved = False
             else:
-                shuffled = y_z.to_numpy().copy()
-                np_rng.shuffle(shuffled)
-                coef = float(np.sqrt(max(0.0, 1.0 - target * target)))
-                y_new_z = target * x_z.to_numpy() + coef * shuffled
-                mix_std = float(np.std(y_new_z, ddof=1))
-                if mix_std > 1e-12:
-                    y_new_z = y_new_z / mix_std
+                y_new, r_fact, clamped, bounds = _permute_to_target(
+                    x_vals, y_vals, target, np_rng
+                )
+                marginal_preserved = True
+                if clamped:
+                    warnings.append(
+                        f"{p_cfg.action}({p_cfg.col1}, {p_cfg.col2}): target_correlation="
+                        f"{target} недостижим перестановкой (границы [{bounds[0]:.3f}, "
+                        f"{bounds[1]:.3f}]) при сохранении маргинального распределения "
+                        f"'{p_cfg.col2}' - применена ближайшая достижимая корреляция "
+                        f"{r_fact:.3f}"
+                    )
 
-            y_new_vals = mu_y + sd_y * y_new_z
-            corrupted_df.loc[valid[valid].index, p_cfg.col2] = y_new_vals.astype("float64")
+            # Приведение типа выполняется только перед фактической записью значений:
+            # если бы искажение было пропущено выше, dtype колонки остался бы неизменным.
+            if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
+                corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
+                warnings.append(
+                    f"Колонка '{p_cfg.col2}' приведена к float64 для '{p_cfg.action}'"
+                )
+
+            corrupted_df.loc[valid[valid].index, p_cfg.col2] = np.asarray(y_new, dtype="float64")
 
             try:
                 new_corr = float(corrupted_df[[p_cfg.col1, p_cfg.col2]].corr().iloc[0, 1])
@@ -531,7 +636,9 @@ def inject_errors(
                 "col2": p_cfg.col2,
                 "original_correlation": orig_corr,
                 "new_correlation": new_corr,
-                "target_correlation": p_cfg.target_correlation
+                "target_correlation": p_cfg.target_correlation,
+                "method": p_cfg.method,
+                "marginal_preserved": marginal_preserved,
             })
         elif p_cfg.action == "shift_dependency":
             x = corrupted_df[p_cfg.col1]
@@ -550,12 +657,6 @@ def inject_errors(
                 )
                 continue
 
-            if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
-                corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
-                warnings.append(
-                    f"Колонка '{p_cfg.col2}' приведена к float64 для '{p_cfg.action}'"
-                )
-
             x_clean = x.astype("float64")
             y_clean = y.astype("float64")
             valid = x_clean.notna() & y_clean.notna()
@@ -571,41 +672,53 @@ def inject_errors(
                 )
                 continue
 
-            xv = x_clean[valid].to_numpy()
-            yv = y_clean[valid].to_numpy()
+            xv = x_clean[valid].to_numpy(dtype="float64")
+            yv = y_clean[valid].to_numpy(dtype="float64")
 
-            mu_x, sd_x = float(xv.mean()), float(xv.std(ddof=1)) or 1.0
-            mu_y, sd_y = float(yv.mean()), float(yv.std(ddof=1)) or 1.0
+            sd_x = float(xv.std(ddof=1)) or 1.0
+            sd_y = float(yv.std(ddof=1)) or 1.0
             r_target = float(p_cfg.target_slope) * sd_x / sd_y
-
-            if abs(r_target) > 1.0:
-                skipped.append({
-                    "column": f"{p_cfg.col1},{p_cfg.col2}",
-                    "config": "shift_dependency",
-                    "reason": f"target_slope_unreachable (implied |r|={abs(r_target):.3f} > 1)",
-                })
-                warnings.append(
-                    f"shift_dependency({p_cfg.col1}, {p_cfg.col2}): target_slope="
-                    f"{p_cfg.target_slope} требует |corr|={abs(r_target):.3f} > 1, "
-                    f"что недостижимо при сохранении std(col2) - пропущено"
-                )
-                continue
 
             a_orig = float(np.cov(xv, yv, ddof=1)[0, 1] / (np.var(xv, ddof=1) or 1e-12))
 
-            z_x = (xv - mu_x) / sd_x
-            z_y = (yv - mu_y) / sd_y
-            z_y_shuffled = z_y.copy()
-            np_rng.shuffle(z_y_shuffled)
-            coef = float(np.sqrt(max(0.0, 1.0 - r_target * r_target)))
-            z_y_new = r_target * z_x + coef * z_y_shuffled
+            if p_cfg.method == "mixture":
+                if abs(r_target) > 1.0:
+                    skipped.append({
+                        "column": f"{p_cfg.col1},{p_cfg.col2}",
+                        "config": "shift_dependency",
+                        "reason": f"target_slope_unreachable (implied |r|={abs(r_target):.3f} > 1)",
+                    })
+                    warnings.append(
+                        f"shift_dependency({p_cfg.col1}, {p_cfg.col2}): target_slope="
+                        f"{p_cfg.target_slope} требует |corr|={abs(r_target):.3f} > 1, "
+                        f"что недостижимо при сохранении std(col2) - пропущено"
+                    )
+                    continue
+                y_new = _mixture_rewrite(yv, xv, r_target, np_rng)
+                marginal_preserved = False
+            else:
+                y_new, r_fact, clamped, bounds = _permute_to_target(
+                    xv, yv, r_target, np_rng
+                )
+                marginal_preserved = True
+                if clamped:
+                    warnings.append(
+                        f"shift_dependency({p_cfg.col1}, {p_cfg.col2}): target_slope="
+                        f"{p_cfg.target_slope} требует корреляцию {r_target:.3f}, "
+                        f"недостижимую перестановкой (границы [{bounds[0]:.3f}, "
+                        f"{bounds[1]:.3f}]) при сохранении маргинального распределения "
+                        f"'{p_cfg.col2}' - применён ближайший достижимый наклон"
+                    )
 
-            mix_std = float(np.std(z_y_new, ddof=1))
-            if mix_std > 1e-12:
-                z_y_new = z_y_new / mix_std
+            # Приведение типа выполняется только перед фактической записью значений:
+            # если бы искажение было пропущено выше, dtype колонки остался бы неизменным.
+            if pd.api.types.is_integer_dtype(corrupted_df[p_cfg.col2]):
+                corrupted_df[p_cfg.col2] = corrupted_df[p_cfg.col2].astype("float64")
+                warnings.append(
+                    f"Колонка '{p_cfg.col2}' приведена к float64 для '{p_cfg.action}'"
+                )
 
-            y_new = mu_y + sd_y * z_y_new
-            corrupted_df.loc[valid[valid].index, p_cfg.col2] = y_new.astype("float64")
+            corrupted_df.loc[valid[valid].index, p_cfg.col2] = np.asarray(y_new, dtype="float64")
 
             try:
                 a_fact = float(np.cov(xv, y_new, ddof=1)[0, 1] / (np.var(xv, ddof=1) or 1e-12))
@@ -620,6 +733,8 @@ def inject_errors(
                 "new_slope": a_fact,
                 "target_slope": p_cfg.target_slope,
                 "original_correlation": orig_corr,
+                "method": p_cfg.method,
+                "marginal_preserved": marginal_preserved,
             })
         elif p_cfg.action == "invert_correlation":
             if pd.api.types.is_numeric_dtype(corrupted_df[p_cfg.col2]) \
